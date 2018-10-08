@@ -1,0 +1,9 @@
+//Dot Product
+C dp = 	       0.00040020s
+DSP dp =       0.00017074s
+Assembly dp =  0.00026036s
+
+//Variance
+C var = 	   0.00056098s
+DSP var =      0.00023172s
+Assembly var = 0.00044106s
