@@ -239,10 +239,19 @@ void DFSDM1_FLT0_IRQHandler(void)
   /* USER CODE BEGIN DFSDM1_FLT0_IRQn 0 */
 	int32_t valueA = HAL_DFSDM_FilterGetRegularValue(&hdfsdm1_filter0,(uint32_t *)1);
 	char buffer[16];
-	HAL_UART_Transmit(&huart1, (uint8_t*)buffer, sprintf(buffer, "%d", valueA), 500);
-	HAL_UART_Transmit(&huart1, (uint8_t*)"\n", 1, 500);
-	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, valueA);
-	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, valueA);
+	
+	if(!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)) {
+		HAL_UART_Transmit(&huart1, (uint8_t*)buffer, sprintf(buffer, "%d", valueA), 500);
+		HAL_UART_Transmit(&huart1, (uint8_t*)"\n", 1, 500);
+		HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, valueA);
+		//HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, valueA);
+	} else {
+		HAL_UART_Transmit(&huart1, (uint8_t*)buffer, sprintf(buffer, "%d", 0), 500);
+		HAL_UART_Transmit(&huart1, (uint8_t*)"\n", 1, 500);
+		HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 0);
+		HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, 0);
+	}
+
   /* USER CODE END DFSDM1_FLT0_IRQn 0 */
   HAL_DFSDM_IRQHandler(&hdfsdm1_filter0);
   /* USER CODE BEGIN DFSDM1_FLT0_IRQn 1 */
@@ -256,12 +265,19 @@ void DFSDM1_FLT0_IRQHandler(void)
 void DFSDM1_FLT1_IRQHandler(void)
 {
   /* USER CODE BEGIN DFSDM1_FLT1_IRQn 0 */
-	int32_t valueB = HAL_DFSDM_FilterGetRegularValue(&hdfsdm1_filter0,(uint32_t *)1);
+	int32_t valueB = HAL_DFSDM_FilterGetRegularValue(&hdfsdm1_filter1,(uint32_t *)2);
 	char buffer[16];
-	HAL_UART_Transmit(&huart1, (uint8_t*)buffer, sprintf(buffer, "%d", valueB), 500);
-	HAL_UART_Transmit(&huart1, (uint8_t*)"\n", 1, 500);
-	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, valueB);
-	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, valueB);
+	if(!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)) {
+		HAL_UART_Transmit(&huart1, (uint8_t*)buffer, sprintf(buffer, "%d", valueB), 500);
+		HAL_UART_Transmit(&huart1, (uint8_t*)"\n", 1, 500);
+		//HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, valueB);
+		HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, valueB);
+	} else {
+		HAL_UART_Transmit(&huart1, (uint8_t*)buffer, sprintf(buffer, "%d", 0), 500);
+		HAL_UART_Transmit(&huart1, (uint8_t*)"\n", 1, 500);
+		HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 0);
+		HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, 0);
+	}
   HAL_DFSDM_IRQHandler(&hdfsdm1_filter1);
   /* USER CODE BEGIN DFSDM1_FLT1_IRQn 1 */
 

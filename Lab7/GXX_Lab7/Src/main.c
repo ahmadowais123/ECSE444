@@ -85,7 +85,6 @@ int threadFlag = 0;
 int initialized = 0;
 char buffer[100];
 
-
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 UART_HandleTypeDef handle;
@@ -103,9 +102,9 @@ void StartTempTask(void const *argument);
 void StartHumidityTask(void const *argument);
 void StartBtnTask(void const *argument);
 void transmit(void const *str);
+void blinkThread(void const *arg);
 int fputc(int ch, FILE *f);
 int fgetc(FILE *f);
-void blinkThread(void const *arg);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
@@ -143,7 +142,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   /* USER CODE BEGIN 2 */
-		MX_GPIO_Init();
+	MX_GPIO_Init();
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -426,7 +425,7 @@ void StartBtnTask(void const * argument){
 	osThreadDef(humidityTask, StartHumidityTask, osPriorityNormal, 0, 128);
 	osThreadDef(gyroTask, StartGyroTask, osPriorityNormal, 0, 128);
 	osThreadDef(usartTransmit, transmit, osPriorityNormal, 0, 100);
-	osThreadDef(blink, blinkThread, osPriorityNormal, 0, 128);
+	//osThreadDef(blink, blinkThread, osPriorityNormal, 0, 128);
 	
 	while(1){
 		if(!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)){
@@ -441,7 +440,7 @@ void StartBtnTask(void const * argument){
 				BSP_ACCELERO_DeInit();
 				osThreadTerminate(currentSensorHandle);
 				osThreadTerminate(usartTaskHandle);
-				osThreadTerminate(blinkTaskHandle);
+				//osThreadTerminate(blinkTaskHandle);
 				initialized = 0;
 				threadFlag = 0;
 				
@@ -453,7 +452,7 @@ void StartBtnTask(void const * argument){
 					} else {
 						initialized = 1;
 						usartTaskHandle = osThreadCreate(osThread(usartTransmit), NULL);
-						blinkTaskHandle = osThreadCreate(osThread(blink), NULL);
+						//blinkTaskHandle = osThreadCreate(osThread(blink), NULL);
 					}		
 					//Magnetometer
 					magnetoTaskHandle = osThreadCreate(osThread(magnetoTask), NULL);
@@ -508,18 +507,6 @@ void transmit(void const *str){
 		osDelay(500);
 	}
 }
-
-int fputc(int ch, FILE *f) {
-  while (HAL_OK != HAL_UART_Transmit(&handle, (uint8_t *) &ch, 1, 30000));
-  return ch;
-}
-
-int fgetc(FILE *f) {
-  uint8_t ch = 0;
-  while (HAL_OK != HAL_UART_Receive(&handle, (uint8_t *)&ch, 1, 30000));
-  return ch;
-}
-
 void blinkThread(void const *arg){
 
 	while(1){
@@ -560,6 +547,18 @@ void UART_init() {
 	
 	HAL_UART_Init(&handle);
 }
+
+int fputc(int ch, FILE *f) {
+  while (HAL_OK != HAL_UART_Transmit(&handle, (uint8_t *) &ch, 1, 30000));
+  return ch;
+}
+
+int fgetc(FILE *f) {
+  uint8_t ch = 0;
+  while (HAL_OK != HAL_UART_Receive(&handle, (uint8_t *)&ch, 1, 30000));
+  return ch;
+}
+
 
 
 /**

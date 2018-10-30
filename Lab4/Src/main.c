@@ -141,6 +141,7 @@ int main(void)
 					
 					if(counter == 10) {
 						counter = 0;
+						//Transmit DMA data
 						HAL_UART_Transmit_DMA(&huart1, (uint8_t *)temperatures, 30);
 					}
 				}
@@ -221,7 +222,7 @@ void SystemClock_Config(void)
 
     /**Configure the Systick interrupt time 
     */
-  HAL_SYSTICK_Config(HAL_RCC_GetHCLKFreq()/10);
+  HAL_SYSTICK_Config(HAL_RCC_GetHCLKFreq()/5);
 
     /**Configure the Systick 
     */
