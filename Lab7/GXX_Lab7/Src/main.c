@@ -65,24 +65,23 @@
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
-osThreadId blinkTaskHandle;
-osThreadId usartTaskHandle;
-osThreadId accTaskHandle;
-osThreadId gyroTaskHandle;
-osThreadId btnTaskHandle;
-osThreadId magnetoTaskHandle;
-osThreadId pressureTaskHandle;
-osThreadId tempTaskHandle;
-osThreadId humidityTaskHandle;
-osThreadId currentSensorHandle;
+osThreadId blinkThreadId;
+osThreadId usartThreadId;
+osThreadId accThreadId;
+osThreadId gyroThreadId;
+osThreadId btnThreadId;
+osThreadId magnetoThreadId;
+osThreadId pressureThreadId;
+osThreadId tempThreadId;
+osThreadId humidityThreadId;
+osThreadId currentThreadId;
 
 //Global Variables
 osMutexId mutex_id;
-int sensorFlag = 0;
 int timer = 0;
-int btnFlag = 0;
-int threadFlag = 0;
-int initialized = 0;
+int buttonPressed = 0;
+int chooseThread = 0;
+int isInitialized = 0;
 char buffer[100];
 
 /* USER CODE BEGIN PV */
@@ -94,14 +93,14 @@ void UART_init(void);
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-void StartAccTask(void const *argument);
-void StartGyroTask(void const *argument);
-void StartMagnetoTask(void const *argument);
-void StartPressureTask(void const *argument);
-void StartTempTask(void const *argument);
-void StartHumidityTask(void const *argument);
-void StartBtnTask(void const *argument);
-void transmit(void const *str);
+void accThread(void const *argument);
+void gyroThread(void const *argument);
+void magnetoThread(void const *argument);
+void pressureThread(void const *argument);
+void tempThread(void const *argument);
+void humidityThread(void const *argument);
+void buttonThread(void const *argument);
+void transmitThread(void const *str);
 void blinkThread(void const *arg);
 int fputc(int ch, FILE *f);
 int fgetc(FILE *f);
@@ -162,8 +161,8 @@ int main(void)
   /* Create the thread(s) */
 
 	//Start Button Control Thread
-	osThreadDef(btnTask, StartBtnTask, osPriorityNormal, 0, 100);
-	btnTaskHandle = osThreadCreate(osThread(btnTask), NULL);
+	osThreadDef(btnTask, buttonThread, osPriorityNormal, 0, 100);
+	btnThreadId = osThreadCreate(osThread(btnTask), NULL);
 	
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -258,7 +257,7 @@ void SystemClock_Config(void){
 /* USER CODE END 4 */
 
 /* StartDefaultTask function */
-void StartAccTask(void const * argument){
+void accThread(void const * argument){
 
   /* USER CODE BEGIN 5 */
 	
@@ -291,7 +290,7 @@ void StartAccTask(void const * argument){
   /* USER CODE END 5 */ 
 }
 
-void StartGyroTask(void const * argument){
+void gyroThread(void const * argument){
 	
 	BSP_GYRO_Init();
 	BSP_GYRO_LowPower(1);
@@ -322,7 +321,7 @@ void StartGyroTask(void const * argument){
 
 }
 
-void StartMagnetoTask(void const * argument){
+void magnetoThread(void const * argument){
 	
 	BSP_MAGNETO_Init();
 	BSP_MAGNETO_LowPower(1);
@@ -350,7 +349,7 @@ void StartMagnetoTask(void const * argument){
   }
 }
 
-void StartPressureTask(void const * argument){
+void pressureThread(void const * argument){
 	
 	BSP_PSENSOR_Init();
 	float pressure;
@@ -371,7 +370,7 @@ void StartPressureTask(void const * argument){
   }
 }
 
-void StartTempTask(void const * argument){
+void tempThread(void const * argument){
 	
 	BSP_TSENSOR_Init();
 	float temp;
@@ -392,7 +391,7 @@ void StartTempTask(void const * argument){
   }
 }
 
-void StartHumidityTask(void const * argument){
+void humidityThread(void const * argument){
 	
 	BSP_HSENSOR_Init();
 	float humidity;
@@ -415,81 +414,81 @@ void StartHumidityTask(void const * argument){
 
 
 
-void StartBtnTask(void const * argument){
+void buttonThread(void const * argument){
 	
 	//Define All Threads
-	osThreadDef(magnetoTask, StartMagnetoTask, osPriorityNormal, 0, 128);
-	osThreadDef(pressureTask, StartPressureTask, osPriorityNormal, 0, 128);
-	osThreadDef(tempTask, StartTempTask, osPriorityNormal, 0, 128);
-	osThreadDef(accTask, StartAccTask, osPriorityNormal, 0, 128);
-	osThreadDef(humidityTask, StartHumidityTask, osPriorityNormal, 0, 128);
-	osThreadDef(gyroTask, StartGyroTask, osPriorityNormal, 0, 128);
-	osThreadDef(usartTransmit, transmit, osPriorityNormal, 0, 100);
+	osThreadDef(magnetoTask, magnetoThread, osPriorityNormal, 0, 128);
+	osThreadDef(pressureTask, pressureThread, osPriorityNormal, 0, 128);
+	osThreadDef(tempTask, tempThread, osPriorityNormal, 0, 128);
+	osThreadDef(accTask, accThread, osPriorityNormal, 0, 128);
+	osThreadDef(humidityTask, humidityThread, osPriorityNormal, 0, 128);
+	osThreadDef(gyroTask, gyroThread, osPriorityNormal, 0, 128);
+	osThreadDef(usartTransmit, transmitThread, osPriorityNormal, 0, 100);
 	//osThreadDef(blink, blinkThread, osPriorityNormal, 0, 128);
 	
 	while(1){
 		if(!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)){
-			btnFlag = 1;
+			buttonPressed = 1;
 			while(!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)){}
-			btnFlag = 0;
+			buttonPressed = 0;
 			if(timer >= 3000){ 
 				
 				//Power Down Everything
 				BSP_GYRO_DeInit();
 				BSP_MAGNETO_DeInit();
 				BSP_ACCELERO_DeInit();
-				osThreadTerminate(currentSensorHandle);
-				osThreadTerminate(usartTaskHandle);
-				//osThreadTerminate(blinkTaskHandle);
-				initialized = 0;
-				threadFlag = 0;
+				osThreadTerminate(currentThreadId);
+				osThreadTerminate(usartThreadId);
+				//osThreadTerminate(blinkThreadId);
+				isInitialized = 0;
+				chooseThread = 0;
 				
 			} else {
-				if(threadFlag == 0) {
-					if(initialized == 1) {
+				if(chooseThread == 0) {
+					if(isInitialized == 1) {
 						BSP_GYRO_DeInit();
-						osThreadTerminate(gyroTaskHandle);
+						osThreadTerminate(gyroThreadId);
 					} else {
-						initialized = 1;
-						usartTaskHandle = osThreadCreate(osThread(usartTransmit), NULL);
-						//blinkTaskHandle = osThreadCreate(osThread(blink), NULL);
+						isInitialized = 1;
+						usartThreadId = osThreadCreate(osThread(usartTransmit), NULL);
+						//blinkThreadId = osThreadCreate(osThread(blink), NULL);
 					}		
 					//Magnetometer
-					magnetoTaskHandle = osThreadCreate(osThread(magnetoTask), NULL);
-					currentSensorHandle = magnetoTaskHandle;
-					threadFlag = 1;					
-				} else if(threadFlag == 1) {
+					magnetoThreadId = osThreadCreate(osThread(magnetoTask), NULL);
+					currentThreadId = magnetoThreadId;
+					chooseThread = 1;					
+				} else if(chooseThread == 1) {
 					//Pressure Sensor
 					BSP_MAGNETO_DeInit();
-					osThreadTerminate(magnetoTaskHandle);
-					pressureTaskHandle = osThreadCreate(osThread(pressureTask), NULL);
-					currentSensorHandle = pressureTaskHandle;
-					threadFlag = 2;
-				} else if(threadFlag == 2) {
+					osThreadTerminate(magnetoThreadId);
+					pressureThreadId = osThreadCreate(osThread(pressureTask), NULL);
+					currentThreadId = pressureThreadId;
+					chooseThread = 2;
+				} else if(chooseThread == 2) {
 					//Temperature Sensor
-					osThreadTerminate(pressureTaskHandle);
-					tempTaskHandle = osThreadCreate(osThread(tempTask), NULL);
-					currentSensorHandle = tempTaskHandle;
-					threadFlag = 3;
-				} else if(threadFlag == 3) {
+					osThreadTerminate(pressureThreadId);
+					tempThreadId = osThreadCreate(osThread(tempTask), NULL);
+					currentThreadId = tempThreadId;
+					chooseThread = 3;
+				} else if(chooseThread == 3) {
 					//Accelerometer Sensor
-					osThreadTerminate(tempTaskHandle);
-					accTaskHandle = osThreadCreate(osThread(accTask), NULL);
-					currentSensorHandle = accTaskHandle;
-					threadFlag = 4;
-				} else if(threadFlag == 4) {
+					osThreadTerminate(tempThreadId);
+					accThreadId = osThreadCreate(osThread(accTask), NULL);
+					currentThreadId = accThreadId;
+					chooseThread = 4;
+				} else if(chooseThread == 4) {
 					//Humidity Sensor
 					BSP_ACCELERO_DeInit();
-					osThreadTerminate(accTaskHandle);
-					humidityTaskHandle = osThreadCreate(osThread(humidityTask), NULL);
-					currentSensorHandle = humidityTaskHandle;
-					threadFlag = 5;
-				} else if(threadFlag == 5) {
+					osThreadTerminate(accThreadId);
+					humidityThreadId = osThreadCreate(osThread(humidityTask), NULL);
+					currentThreadId = humidityThreadId;
+					chooseThread = 5;
+				} else if(chooseThread == 5) {
 					//Gyroscope Sensor
-					osThreadTerminate(humidityTaskHandle);
-					gyroTaskHandle = osThreadCreate(osThread(gyroTask), NULL);
-					currentSensorHandle = gyroTaskHandle;
-					threadFlag = 0;
+					osThreadTerminate(humidityThreadId);
+					gyroThreadId = osThreadCreate(osThread(gyroTask), NULL);
+          currentThreadId = gyroThreadId;
+					chooseThread = 0;
 				}
 			}
 			timer = 0;
@@ -497,14 +496,14 @@ void StartBtnTask(void const * argument){
 	}
 }
 
-void transmit(void const *str){
+void transmitThread(void const *str){
 	UART_init();
 	while(1){
 		osMutexWait(mutex_id, osWaitForever);
 		HAL_UART_Transmit(&handle, (uint8_t *) &buffer[0], strlen(buffer), 30000);
 		//HAL_UART_Transmit(&handle, (uint8_t *) "\n", 1, 30000);
 		osMutexRelease(mutex_id);
-		osDelay(500);
+		osDelay(200);
 	}
 }
 void blinkThread(void const *arg){
@@ -515,8 +514,6 @@ void blinkThread(void const *arg){
 	}
 	
 }
-
-
 
 void UART_init() {	
 	GPIO_InitTypeDef gpio_init;
@@ -572,7 +569,7 @@ int fgetc(FILE *f) {
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
   /* USER CODE BEGIN Callback 0 */
 	//HAL_UART_Transmit(&handle, (uint8_t *)"timer\n",6, 3000 );
-	if(btnFlag == 1){
+	if(buttonPressed == 1){
 		timer++;
 	}
   /* USER CODE END Callback 0 */
