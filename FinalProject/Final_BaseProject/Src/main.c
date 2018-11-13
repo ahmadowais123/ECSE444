@@ -67,8 +67,8 @@ DFSDM_Channel_HandleTypeDef hdfsdm1_channel2;
 
 UART_HandleTypeDef huart1;
 
-osThreadId defaultTaskHandle;
-osThreadId controllerTaskHandle;
+osThreadId soundThreadTaskHandle;
+osThreadId blinkThreadTaskHandle;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
@@ -80,17 +80,23 @@ int sineWave1Flag = 0;
 //Variables
 float32_t freq1 = 440;
 float32_t freq2 = 5000;
-float32_t sample_float1 = 0;
-float32_t sample_float2 = 0;
-uint8_t sample_int1 = 0;
-uint8_t sample_int2 = 0;
 float32_t Ts = 16000;
 uint32_t write_address1 = ((uint32_t)0x0);
 uint32_t read_address1 = ((uint32_t)0x0);
 uint32_t write_address2 = ((uint32_t)0x186A0);
 uint32_t read_address2 = ((uint32_t)0x186A0);
 	
-uint8_t bufferValues[100];	
+//mixed waves	
+uint8_t x1[32000];
+uint8_t x2[32000];	
+	
+//coefficients
+int a11 = 1;
+int a12 = 2;
+int a21 = 3;
+int a22 = 4;
+
+uint8_t bufferValues[100];
 char buffer[100];
 /* USER CODE END PV */
 
@@ -103,8 +109,11 @@ static void MX_DAC1_Init(void);
 
 void StartDefaultTask(void const * argument);
 void blinkThread(void const *arg);
+void soundThread(void const *arg);
 void sineWave(float freq, uint32_t write_address);
 int transmitSineWave(uint32_t readAddress);
+int mixWaves(uint32_t readAddress1, uint32_t readAddress2);
+int unmixedWaves(uint32_t readAddress1, uint32_t readAddress2);
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
 
@@ -180,21 +189,23 @@ int main(void)
   //osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
   //defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 	
-	osThreadDef(blink, blinkThread, osPriorityNormal, 0, 128);
-  defaultTaskHandle = osThreadCreate(osThread(blink), NULL);
-
 	sineWave(261.63, write_address1);
-	transmitSineWave(read_address1);
+	transmitSineWave(0x0);
 
 	sineWave(392.00, write_address2);
-	transmitSineWave(read_address2);
+	transmitSineWave(0x186A0);
 	
+	unmixedWaves(read_address1,read_address2);
 	//BSP_QSPI_Erase_Chip();
 	
 	//BSP_QSPI_EnableMemoryMappedMode();
 
   /* USER CODE BEGIN RTOS_THREADS */
-  /* add threads, ... */
+	osThreadDef(soundTask, soundThread, osPriorityNormal, 0, 128);
+	soundThreadTaskHandle = osThreadCreate(osThread(soundTask), NULL);
+	
+	osThreadDef(blinkTask, blinkThread, osPriorityNormal, 0, 128);
+	blinkThreadTaskHandle = osThreadCreate(osThread(blinkTask), NULL);
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
@@ -461,19 +472,56 @@ static void MX_GPIO_Init(void){
 
 /* USER CODE END 4 */
 
-/* StartDefaultTask function */
-void StartDefaultTask(void const * argument)
-{
-
-  /* USER CODE BEGIN 5 */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
-  }
-  /* USER CODE END 5 */ 
+void soundThread(void const * argument) {
+		int index = 0;
+		while(1) {
+			if(interrupt_flag == 1) {
+				interrupt_flag = 0;
+				if(index == 32000) index = 0;
+				
+				HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_8B_R, x1[index]);
+				HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_8B_R, x2[index]);
+				index++;
+			}
+		}
 }
 
+void soundThreadUnmixed(void const * argument) {
+		int index = 0;
+		while(1) {
+			if(index == 32000) index = 0;
+			
+			HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_8B_R, x1[index]);
+			HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_8B_R, x2[index]);
+			index++;
+		}
+}
+
+int mixWaves(uint32_t readAddress1, uint32_t readAddress2){
+	BSP_QSPI_Read(x1, readAddress1, 32000);
+	BSP_QSPI_Read(x2, readAddress2, 32000);
+	
+	for(int i = 0; i < 32000; i++){
+		x1[i] = (a11*x1[i]) + (a12*x2[i]);
+		x2[i] = (a21*x1[i]) + (a22*x2[i]);
+	}
+	
+	return 1;
+}
+
+int unmixedWaves(uint32_t readAddress1, uint32_t readAddress2){	
+	BSP_QSPI_Read(x1, readAddress1, 32000);
+	BSP_QSPI_Read(x2, readAddress2, 32000);
+	
+	/**
+	for(int i=0; i<32000; i++) {
+		memset(buffer, 0, strlen(buffer));
+		sprintf(buffer, "%d\n", (uint8_t) x1[i]);
+		HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+	}
+	**/
+	return 1;
+}
 
 
 
@@ -481,7 +529,6 @@ void sineWave(float freq, uint32_t write_address) {
 	float sample;
 	uint8_t sample_int;
 	memset(bufferValues, 0, 100);
-	uint32_t tempWriteAdd = write_address;
 	int index = 0;
 	for(int i=0; i<32000; i++) {
 		sample = arm_sin_f32(2 * PI * freq * i * (1/Ts));
@@ -491,10 +538,10 @@ void sineWave(float freq, uint32_t write_address) {
 		bufferValues[index++] = sample_int;
 		
 		if(index == 100) {
-				BSP_QSPI_Write((uint8_t *) bufferValues, tempWriteAdd, 100);
+				BSP_QSPI_Write((uint8_t *) bufferValues, write_address, 100);
 				memset(bufferValues, 0, 100);
 				index = 0;
-				tempWriteAdd += 100;
+				write_address += 100;
 		}
 	}
 }
