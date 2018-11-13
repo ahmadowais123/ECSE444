@@ -1,4 +1,3 @@
-
 /**
   ******************************************************************************
   * @file           : main.c
@@ -80,14 +79,16 @@ float32_t freq1 = 440;
 float32_t freq2 = 440;
 float32_t sample_float1 = 0;
 float32_t sample_float2 = 0;
-uint32_t sample_int1 = 0;
-uint32_t sample_int2 = 0;
+uint8_t sample_int1 = 0;
+uint8_t sample_int2 = 0;
 float32_t Ts = 16000;
-uint32_t write_address1 = ((uint32_t)0x0050);
-uint32_t read_address1 = ((uint32_t)0x0050);
-uint32_t write_address2 = ((uint32_t)0x0050);
-uint32_t read_address2 = ((uint32_t)0x0050);
+uint32_t write_address1 = ((uint32_t)0x0);
+uint32_t read_address1 = ((uint32_t)0x0);
+uint32_t write_address2 = ((uint32_t)0x0);
+uint32_t read_address2 = ((uint32_t)0x0);
 uint8_t a[20] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20};
+	
+uint8_t bufferValues[100];	
 char buffer[100];
 /* USER CODE END PV */
 
@@ -153,6 +154,7 @@ int main(void)
   MX_DFSDM1_Init();
   MX_DAC1_Init();
 	BSP_QSPI_Init();
+	
   /* USER CODE BEGIN 2 */
 	HAL_DAC_Start(&hdac1, DAC_CHANNEL_1);
 	HAL_DAC_Start(&hdac1, DAC_CHANNEL_2);
@@ -175,10 +177,13 @@ int main(void)
   //osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
   //defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 	
-	//BSP_QSPI_Erase_Chip();
 	
 	osThreadDef(blink, blinkThread, osPriorityNormal, 0, 128);
   defaultTaskHandle = osThreadCreate(osThread(blink), NULL);
+	
+	//BSP_QSPI_Erase_Chip();
+	
+	//BSP_QSPI_EnableMemoryMappedMode();
 	
 	osThreadDef(sineWave, sineWaveThread, osPriorityNormal, 0, 128);
   defaultTaskHandle = osThreadCreate(osThread(sineWave), NULL);
@@ -465,33 +470,47 @@ void StartDefaultTask(void const * argument)
 }
 
 
-/**
+
 void sineWaveThread(void const *arg){
-	uint8_t a = 5;
+	//uint8_t a = 5;
+	int index = 0;
+	
+	
 	while(1) {
-		if(interrupt_flag == 1 && countValues <32000) {
-			interrupt_flag = 0;
+		//if(interrupt_flag == 1 && countValues <32000) {
+		if(countValues < 32000){
 			sample_float1 = arm_sin_f32(2 * PI * freq1 * countValues * (1/Ts));
 			sample_float1 = sample_float1 + 1;
-			sample_float1 = sample_float1 * 2048;
-			sample_int1 = (uint32_t) sample_float1;
-			BSP_QSPI_Write(&a, write_address1, 1);
-			a++;
-			write_address1++;
+			sample_float1 = sample_float1 * 128;
+			sample_int1 = (uint8_t) sample_float1;
+			bufferValues[index++] = sample_int1;
+			
+			if(index == 100){
+				BSP_QSPI_Write((uint8_t *) bufferValues, write_address1, 100);
+				index = 0;
+				write_address1 += 100;
+			}
+			
 			countValues++;
 			//memset(buffer, 0, strlen(buffer));
 			//HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, sample_int);
 			//HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, sample_int);		
-		} 
+		//} 
 		
-		if(countValues >= 32000) {
-			uint8_t *readValue;
+		} else {
+			uint8_t readValue[100];
 			while(1) {
-				BSP_QSPI_Read(readValue, read_address1, 0x1);
+				
+				BSP_QSPI_Read(readValue, read_address1, 100);
 				memset(buffer, 0, strlen(buffer));
-				sprintf(buffer, "%d\n", (uint32_t)*readValue);
-				HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0],strlen(buffer), 3000);
-				read_address1++;
+				
+				for(int i = 0; i < 100; i++){					
+					sprintf(buffer, "%d\n", (uint8_t) readValue[i]);
+					HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+				}
+				
+				read_address1 += 100;
+				
 				if(read_address1 >=32000) {
 						while(1){};
 				}
@@ -500,7 +519,7 @@ void sineWaveThread(void const *arg){
 		
 	}
 }
-**/
+
 
 /**
 void sineWaveThread(void const *arg){
@@ -520,7 +539,7 @@ void sineWaveThread(void const *arg){
 	}
 }**/
 
-
+/*
 void sineWaveThread(void const *arg){
 	
 	uint8_t *read = malloc(sizeof(uint8_t)*20);
@@ -534,7 +553,7 @@ void sineWaveThread(void const *arg){
 		i++;
 		i = i%20;
 	}
-}
+}*/
 
 void blinkThread(void const *arg){
 	while(1){
@@ -555,8 +574,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   /* USER CODE BEGIN Callback 0 */
 	interrupt_flag = 1;
-	countValues++;
-
   /* USER CODE END Callback 0 */
   if (htim->Instance == TIM17) {
     HAL_IncTick();
