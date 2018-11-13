@@ -96,10 +96,12 @@ uint8_t x1[32000];
 uint8_t x2[32000];	
 	
 //coefficients
-int a11 = 1;
-int a12 = 2;
-int a21 = 3;
-int a22 = 4;
+int a11;
+int a12;
+int a21;
+int a22;
+uint32_t maxRangex1;
+uint32_t maxRangex2;
 
 uint8_t bufferValues[100];
 char buffer[100];
@@ -194,22 +196,31 @@ int main(void)
   /* definition and creation of defaultTask */
   //osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
   //defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
+	a11 = 5;
+	a12 = 9;
+	a21 = 3;
+	a22 = 6;
+	maxRangex1 = a11*256 + a12*256;
+	maxRangex1 = a21*256 + a22*256;
 	
-	sineWave(261.63, write_address1);
+	
+	sineWave(440, write_address1);
 	transmitSineWave(0x0);
 
-	sineWave(392.00, write_address2);
+	sineWave(1000, write_address2);
 	transmitSineWave(0x186A0);
 	
-	//unmixedWaves(read_address1,read_address2);
+	mixWaves(read_address1,read_address2);
 	//BSP_QSPI_Erase_Chip();
 	
 	//BSP_QSPI_EnableMemoryMappedMode();
 
   /* USER CODE BEGIN RTOS_THREADS */
-	osThreadDef(buttonTask, buttonThread, osPriorityNormal, 0, 128);
-	buttonThreadTaskHandle = osThreadCreate(osThread(buttonTask), NULL);
-
+	//osThreadDef(buttonTask, buttonThread, osPriorityNormal, 0, 128);
+	//buttonThreadTaskHandle = osThreadCreate(osThread(buttonTask), NULL);
+	
+	osThreadDef(soundTask, soundThread, osPriorityNormal, 0, 128);
+	soundThreadTaskHandle = osThreadCreate(osThread(soundTask), NULL);
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
@@ -542,8 +553,13 @@ int mixWaves(uint32_t readAddress1, uint32_t readAddress2){
 	BSP_QSPI_Read(x2, readAddress2, 32000);
 	
 	for(int i = 0; i < 32000; i++){
-		x1[i] = (a11*x1[i]) + (a12*x2[i]);
-		x2[i] = (a21*x1[i]) + (a22*x2[i]);
+		float X1 = (((a11*x1[i]) + (a12*x2[i]))/(float)maxRangex1)*128;
+		float X2 = (((a21*x1[i]) + (a22*x2[i]))/(float)maxRangex2)*128;
+		memset(buffer, 0, strlen(buffer));
+		sprintf(buffer, "%d\n", (uint8_t) X1);
+		HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+		x1[i] = (uint8_t)X1;
+		x2[i] = (uint8_t)X2;
 	}
 	
 	return 1;
