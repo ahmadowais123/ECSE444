@@ -99,7 +99,7 @@ HAL_StatusTypeDef HAL_InitTick(uint32_t TickPriority)
    
   /* Compute the prescaler value to have TIM17 counter clock equal to 1MHz */
   //uwPrescalerValue = (uint32_t) (((uwTimclock / 1000000) - 1)*2.5);
-	uwPrescalerValue = (uint32_t) (((uwTimclock / 1000000)-1)*2.5);
+	uwPrescalerValue = (uint32_t) (((uwTimclock / 1000000) - 1)*2.5);
   
   /* Initialize TIM17 */
   htim17.Instance = TIM17;

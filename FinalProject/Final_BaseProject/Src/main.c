@@ -69,7 +69,6 @@ UART_HandleTypeDef huart1;
 
 osThreadId soundThreadTaskHandle;
 osThreadId blinkThreadTaskHandle;
-osThreadId buttonThreadTaskHandle;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
@@ -80,11 +79,10 @@ int sineWave1Flag = 0;
 int buttonPressed = 0;
 int timer = 0;
 int chooseThread = 0;
-int initialized = 0;
 
 //Variables
-float32_t freq1 = 440;
-float32_t freq2 = 5000;
+float32_t freq1 = 261.63;
+float32_t freq2 = 392.00;
 float32_t Ts = 16000;
 uint32_t write_address1 = ((uint32_t)0x0);
 uint32_t read_address1 = ((uint32_t)0x0);
@@ -96,12 +94,10 @@ uint8_t x1[32000];
 uint8_t x2[32000];	
 	
 //coefficients
-int a11;
-int a12;
-int a21;
-int a22;
-uint32_t maxRangex1;
-uint32_t maxRangex2;
+int a11 = 1;
+int a12 = 2;
+int a21 = 3;
+int a22 = 4;
 
 uint8_t bufferValues[100];
 char buffer[100];
@@ -117,7 +113,6 @@ static void MX_DAC1_Init(void);
 void StartDefaultTask(void const * argument);
 void blinkThread(void const *arg);
 void soundThread(void const *arg);
-void buttonThread(void const *arg);
 void sineWave(float freq, uint32_t write_address);
 int transmitSineWave(uint32_t readAddress);
 int mixWaves(uint32_t readAddress1, uint32_t readAddress2);
@@ -193,32 +188,17 @@ int main(void)
   /* USER CODE END RTOS_TIMERS */
 
   /* Create the thread(s) */
-  /* definition and creation of defaultTask */
-  //osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
-  //defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
-	a11 = 5;
-	a12 = 9;
-	a21 = 3;
-	a22 = 6;
-	maxRangex1 = a11*256 + a12*256;
-	maxRangex1 = a21*256 + a22*256;
-	
-	
-	sineWave(440, write_address1);
+	sineWave(freq1, write_address1);
 	transmitSineWave(0x0);
 
-	sineWave(1000, write_address2);
+	sineWave(freq2, write_address2);
 	transmitSineWave(0x186A0);
 	
-	mixWaves(read_address1,read_address2);
-	//BSP_QSPI_Erase_Chip();
-	
+	//unmixedWaves(read_address1,read_address2);
+	//mixWaves(read_address1, read_address2);
 	//BSP_QSPI_EnableMemoryMappedMode();
 
   /* USER CODE BEGIN RTOS_THREADS */
-	//osThreadDef(buttonTask, buttonThread, osPriorityNormal, 0, 128);
-	//buttonThreadTaskHandle = osThreadCreate(osThread(buttonTask), NULL);
-	
 	osThreadDef(soundTask, soundThread, osPriorityNormal, 0, 128);
 	soundThreadTaskHandle = osThreadCreate(osThread(soundTask), NULL);
   /* USER CODE END RTOS_THREADS */
@@ -489,8 +469,10 @@ static void MX_GPIO_Init(void){
 
 void soundThread(void const * argument) {
 		int index = 0;
+		osThreadDef(blinkTask, blinkThread, osPriorityNormal, 0, 128);
+		blinkThreadTaskHandle = osThreadCreate(osThread(blinkTask), NULL);
 		while(1) {
-			if(interrupt_flag == 1) {
+			if(interrupt_flag == 1 && chooseThread != 0) {
 				interrupt_flag = 0;
 				if(index == 32000) index = 0;
 				
@@ -498,72 +480,69 @@ void soundThread(void const * argument) {
 				HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_8B_R, x2[index]);
 				index++;
 			}
-		}
-}
-
-void buttonThread(void const * argument){	 
-	osThreadDef(blinkTask, blinkThread, osPriorityNormal, 0, 128);
-	blinkThreadTaskHandle = osThreadCreate(osThread(blinkTask), NULL);
-	
-	osThreadDef(soundTask, soundThread, osPriorityNormal, 0, 128);
-	
-	while(1){
+			
 			if(!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)){
 				buttonPressed = 1;
 				while(!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)){}
-				buttonPressed = 0; 
-					
-				if(timer >= 48000) {
-					osThreadTerminate(soundThreadTaskHandle);
+				buttonPressed = 0;
+				chooseThread = chooseThread + 1;
+				
+				if(chooseThread == 1) {
+					unmixedWaves(read_address1, read_address2);
+				} else if(chooseThread == 2) {
+					mixWaves(read_address1, read_address2);
+				} else if(chooseThread == 3) {
 					osThreadTerminate(blinkThreadTaskHandle);
 					BSP_QSPI_Erase_Chip();
-					initialized = 0;
-					
-				} else {
-					if(chooseThread == 0) {	
-						if(initialized == 1) {
-							osThreadTerminate(soundThreadTaskHandle);
-						}
-						//Unmixed Waves
-						initialized = 1;
-						unmixedWaves(read_address1, read_address2);
-						soundThreadTaskHandle = osThreadCreate(osThread(soundTask), NULL);
-						chooseThread = 1;					
-					} else if(chooseThread == 1) {
-						//Mixed Waves
-						osThreadTerminate(soundThreadTaskHandle);
-						mixWaves(read_address1, read_address2);
-						soundThreadTaskHandle = osThreadCreate(osThread(soundTask), NULL);
-						chooseThread = 0;
-					} else if(chooseThread == 2) {
-						//ICA
-						osThreadTerminate(soundThreadTaskHandle);
-						//mixWaves(read_address1, read_address2);
-						//soundThreadTaskHandle = osThreadCreate(osThread(soundTask), NULL);
-						chooseThread = 0;
-					}
+					osThreadCreate(osThread(blinkTask), NULL);
+					while(1){};
 				}
 			}
-				timer = 0;
+			
+			timer = 0;
+			
+			
+		}
+}
+
+void soundThreadUnmixed(void const * argument) {
+		int index = 0;
+		while(1) {
+			if(index == 32000) index = 0;
+			
+			HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_8B_R, x1[index]);
+			HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_8B_R, x2[index]);
+			index++;
 		}
 }
 
 int mixWaves(uint32_t readAddress1, uint32_t readAddress2){
 	BSP_QSPI_Read(x1, readAddress1, 32000);
 	BSP_QSPI_Read(x2, readAddress2, 32000);
-	
+	float maxRangex1 = (255.0*a11) + (255.0*a12);
+	float maxRangex2 = (255.0*a21) + (255.0*a22);
 	for(int i = 0; i < 32000; i++){
-		float X1 = (((a11*x1[i]) + (a12*x2[i]))/(float)maxRangex1)*128;
-		float X2 = (((a21*x1[i]) + (a22*x2[i]))/(float)maxRangex2)*128;
-		memset(buffer, 0, strlen(buffer));
-		sprintf(buffer, "%d\n", (uint8_t) X1);
-		HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+		float mult_11 = (float)a11*(float)x1[i];
+		float mult_12 = (float)a12*(float)x2[i];
+		float mult_21 = (float)a21*(float)x1[i];
+		float mult_22 = (float)a22*(float)x2[i];
+		float X1 = mult_11 + mult_12;
+		float X2 = mult_21 + mult_22;	
+		X1 = X1/maxRangex1;
+		X2 = X2/maxRangex2;
+		X1 = X1*254;
+		X2 = X2*254;
+		
 		x1[i] = (uint8_t)X1;
 		x2[i] = (uint8_t)X2;
+		memset(buffer, 0 ,strlen(buffer));
+		sprintf(buffer, "%d\n", x1[i]);
+		HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
 	}
 	
 	return 1;
 }
+
 
 int unmixedWaves(uint32_t readAddress1, uint32_t readAddress2){	
 	BSP_QSPI_Read(x1, readAddress1, 32000);
@@ -581,8 +560,8 @@ void sineWave(float freq, uint32_t write_address) {
 	int index = 0;
 	for(int i=0; i<32000; i++) {
 		sample = arm_sin_f32(2 * PI * freq * i * (1/Ts));
-		sample = sample + 1;
-		sample = sample * 128;
+		sample = sample + 1.0;
+		sample = sample * 127.0;
 		sample_int = (uint8_t) sample;
 		bufferValues[index++] = sample_int;
 		
@@ -635,7 +614,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   /* USER CODE BEGIN Callback 0 */
 	interrupt_flag = 1;
-	if(buttonPressed == 1){
+	if(buttonPressed == 1) {
 		timer++;
 	}
   /* USER CODE END Callback 0 */
