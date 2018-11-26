@@ -46,7 +46,7 @@
   ******************************************************************************
   */
 /* Includes ------------------------------------------------------------------*/
-#define NUMBER_OF_SAMPLES 10
+#define NUMBER_OF_SAMPLES 32000
 #include "main.h"
 #include "stm32l4xx_hal.h"
 #include "cmsis_os.h"
@@ -112,8 +112,8 @@ uint32_t read_address9 = ((uint32_t)0xC3500);
 //mixed waves	
 //uint8_t x1[NUMBER_OF_SAMPLES];
 //uint8_t x2[NUMBER_OF_SAMPLES];	
-uint8_t x1[NUMBER_OF_SAMPLES] = {5, 7, 3, 90, 13, 8, 25, 67, 2, 33};
-uint8_t x2[NUMBER_OF_SAMPLES] = {8, 34, 19, 50, 48, 24, 5, 10, 14, 37};
+uint8_t x1[NUMBER_OF_SAMPLES];
+uint8_t x2[NUMBER_OF_SAMPLES];
 //coefficients
 int a11 = 1;
 int a12 = 2;
@@ -178,6 +178,7 @@ void eigVectors(void);
 void mult(void);
 void remMean(void);
 void fpica(void);
+void eraseMemory();
 int transmitSineWave(uint32_t readAddress);
 int mixWaves(uint32_t readAddress1, uint32_t readAddress2);
 int unmixedWaves(uint32_t readAddress1, uint32_t readAddress2);
@@ -263,13 +264,13 @@ int main(void)
   /* USER CODE END RTOS_TIMERS */
 
   /* Create the thread(s) */
-//	sineWave(freq1, write_address1);
-//	transmitSineWave(0x0);
+	sineWave(freq1, write_address1);
+	transmitSineWave(read_address1);
 
-//	sineWave(freq2, write_address2);
-//	transmitSineWave(0x186A0);
-	
-	//unmixedWaves(read_address1,read_address2);
+	sineWave(freq2, write_address2);
+	transmitSineWave(read_address2);
+					
+	unmixedWaves(read_address1,read_address2);
 	//mixWaves(read_address1, read_address2);
 	//BSP_QSPI_EnableMemoryMappedMode();
 
@@ -579,9 +580,11 @@ void soundThread(void const * argument) {
 				**/
 				if(chooseThread == 1) {
 					remMean();
+					//sineWave(freq1, write_address1);
+					//transmitSineWave(read_address1);
 				} else if(chooseThread == 2) {
 					osThreadTerminate(blinkThreadTaskHandle);
-					BSP_QSPI_Erase_Chip();
+					eraseMemory();
 					osThreadCreate(osThread(blinkTask), NULL);
 					while(1){};
 				}
@@ -601,6 +604,21 @@ void soundThreadUnmixed(void const * argument) {
 			HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_8B_R, x1[index]);
 			HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_8B_R, x2[index]);
 			index++;
+		}
+}
+
+void eraseMemory() {
+		int status = 0;
+		for(int i=0; i<256; i++) {
+			if(BSP_QSPI_Erase_Sector(i) == QSPI_ERROR) {
+				status = -1;
+			}
+		}
+		
+		if(status == -1) {
+			HAL_UART_Transmit(&huart1, (uint8_t *)"ERROR\n", 6, 30000);
+		} else {
+			HAL_UART_Transmit(&huart1, (uint8_t *)"OK\n", 3, 30000);
 		}
 }
 
@@ -750,8 +768,8 @@ void remMean(void){
 	
 	int index = 0;
 	
-	float32_t removedMean1[NUMBER_OF_SAMPLES]; //x1 - mean
-	float32_t removedMean2[NUMBER_OF_SAMPLES]; //x1 - mean
+	float32_t removedMean1[10]; //x1 - mean
+	float32_t removedMean2[10]; //x1 - mean
 	
 	int temp1 = write_address3;
 	int temp2 = write_address4;
@@ -780,10 +798,10 @@ void remMean(void){
 	
 	memset(removedMean1, 0, 40);
 	memset(removedMean2, 0, 40);
-	BSP_QSPI_Read((uint8_t *)removedMean1, read_address3, 40);
-	BSP_QSPI_Read((uint8_t *)removedMean2, read_address4, 40);
+	BSP_QSPI_Read((uint8_t *)removedMean1, read_address3+127960, 40);
+	BSP_QSPI_Read((uint8_t *)removedMean2, read_address4+127960, 40);
 	
-	for(int i=0; i<NUMBER_OF_SAMPLES; i++) {
+	for(int i=0; i<10; i++) {
 		memset(buffer, 0, strlen(buffer));
 		sprintf(buffer, "value 1: %.2f value 2: %.2f\n", removedMean1[i], removedMean2[i]);
 		HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
