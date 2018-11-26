@@ -46,6 +46,7 @@
   ******************************************************************************
   */
 /* Includes ------------------------------------------------------------------*/
+#define NUMBER_OF_SAMPLES 10
 #include "main.h"
 #include "stm32l4xx_hal.h"
 #include "cmsis_os.h"
@@ -84,20 +85,77 @@ int chooseThread = 0;
 float32_t freq1 = 261.63;
 float32_t freq2 = 392.00;
 float32_t Ts = 16000;
+float32_t epsilon = 0.0001;
+int MAX_NUMBER_OF_ITERATIONS = 1000;
+
+//QSPI Addresses
 uint32_t write_address1 = ((uint32_t)0x0);
 uint32_t read_address1 = ((uint32_t)0x0);
 uint32_t write_address2 = ((uint32_t)0x186A0);
 uint32_t read_address2 = ((uint32_t)0x186A0);
+uint32_t write_address3 = ((uint32_t)0x30D40);
+uint32_t read_address3 = ((uint32_t)0x30D40);
+uint32_t write_address4 = ((uint32_t)0x493E0);
+uint32_t read_address4 = ((uint32_t)0x493E0);
+uint32_t write_address5 = ((uint32_t)0x61A80);
+uint32_t read_address5 = ((uint32_t)0x61A80);
+uint32_t write_address6 = ((uint32_t)0x7A120);
+uint32_t read_address6 = ((uint32_t)0x7A120);
+uint32_t write_address7 = ((uint32_t)0x927C0);
+uint32_t read_address7 = ((uint32_t)0x927C0);
+uint32_t write_address8 = ((uint32_t)0xAAE60);
+uint32_t read_address8 = ((uint32_t)0xAAE60);
+uint32_t write_address9 = ((uint32_t)0xC3500);
+uint32_t read_address9 = ((uint32_t)0xC3500);
+
 	
 //mixed waves	
-uint8_t x1[32000];
-uint8_t x2[32000];	
-	
+//uint8_t x1[NUMBER_OF_SAMPLES];
+//uint8_t x2[NUMBER_OF_SAMPLES];	
+uint8_t x1[NUMBER_OF_SAMPLES] = {5, 7, 3, 90, 13, 8, 25, 67, 2, 33};
+uint8_t x2[NUMBER_OF_SAMPLES] = {8, 34, 19, 50, 48, 24, 5, 10, 14, 37};
 //coefficients
 int a11 = 1;
 int a12 = 2;
 int a21 = 3;
 int a22 = 4;
+
+//FAST ICA//
+int means[2];
+
+//cov matrix
+float32_t var1 = 0, cov1 = 0;
+float32_t cov2 = 0, var2 = 0;
+
+float32_t sols1[2];
+float32_t sols2[2];
+
+float32_t eig[2];
+
+
+arm_matrix_instance_f32 eigDiagMatrix;
+float32_t eigDiagMatrixData[4];
+
+arm_matrix_instance_f32 eigVecMatrix;
+float32_t eigVecMatrixData[4];
+
+arm_matrix_instance_f32 whiteningMatrix;
+float32_t whiteningMatrixData[4];
+
+arm_matrix_instance_f32 dewhiteningMatrix;
+float32_t dewhiteningMatrixData[4];
+
+arm_matrix_instance_f32 newVectorMatrix;
+float32_t newVectorMatrixData[4];
+
+//A Matrix
+arm_matrix_instance_f32 A;
+float32_t Adata[4];
+	
+//W Matrix
+arm_matrix_instance_f32 W;
+float32_t Wdata[4];
+
 
 uint8_t bufferValues[100];
 char buffer[100];
@@ -114,9 +172,18 @@ void StartDefaultTask(void const * argument);
 void blinkThread(void const *arg);
 void soundThread(void const *arg);
 void sineWave(float freq, uint32_t write_address);
+void remMean(void);
+void eigValues(void);
+void eigVectors(void);
+void mult(void);
+void remMean(void);
+void fpica(void);
 int transmitSineWave(uint32_t readAddress);
 int mixWaves(uint32_t readAddress1, uint32_t readAddress2);
 int unmixedWaves(uint32_t readAddress1, uint32_t readAddress2);
+float32_t RandomNumber(float Max);
+float32_t normalize(float32_t vector[], int length);
+float32_t * simultSolve(float32_t a, float32_t b, float32_t p, float32_t q, float32_t * sols);
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
 
@@ -175,6 +242,14 @@ int main(void)
 	HAL_DAC_Start(&hdac1, DAC_CHANNEL_2);
   /* USER CODE END 2 */
 
+	arm_mat_init_f32(&eigDiagMatrix, 2, 2, eigDiagMatrixData);
+	arm_mat_init_f32(&eigVecMatrix, 2, 2, eigVecMatrixData);
+	arm_mat_init_f32(&whiteningMatrix, 2, 2, whiteningMatrixData);
+	arm_mat_init_f32(&dewhiteningMatrix, 2, 2, dewhiteningMatrixData);
+	arm_mat_init_f32(&newVectorMatrix, 2, 32000, newVectorMatrixData);
+	arm_mat_init_f32(&A, 2, 2, Adata);
+	arm_mat_init_f32(&W, 2, 2, Wdata);
+
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
   /* USER CODE END RTOS_MUTEX */
@@ -188,11 +263,11 @@ int main(void)
   /* USER CODE END RTOS_TIMERS */
 
   /* Create the thread(s) */
-	sineWave(freq1, write_address1);
-	transmitSineWave(0x0);
+//	sineWave(freq1, write_address1);
+//	transmitSineWave(0x0);
 
-	sineWave(freq2, write_address2);
-	transmitSineWave(0x186A0);
+//	sineWave(freq2, write_address2);
+//	transmitSineWave(0x186A0);
 	
 	//unmixedWaves(read_address1,read_address2);
 	//mixWaves(read_address1, read_address2);
@@ -215,6 +290,7 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+	
 	
 	while (1)
   {
@@ -472,6 +548,7 @@ void soundThread(void const * argument) {
 		osThreadDef(blinkTask, blinkThread, osPriorityNormal, 0, 128);
 		blinkThreadTaskHandle = osThreadCreate(osThread(blinkTask), NULL);
 		while(1) {
+			/**
 			if(interrupt_flag == 1 && chooseThread != 0) {
 				interrupt_flag = 0;
 				if(index == 32000) index = 0;
@@ -480,18 +557,29 @@ void soundThread(void const * argument) {
 				HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_8B_R, x2[index]);
 				index++;
 			}
-			
+			**/
 			if(!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)){
 				buttonPressed = 1;
 				while(!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)){}
 				buttonPressed = 0;
 				chooseThread = chooseThread + 1;
-				
+				/**
 				if(chooseThread == 1) {
 					unmixedWaves(read_address1, read_address2);
-				} else if(chooseThread == 2) {
-					mixWaves(read_address1, read_address2);
+				} else if(chooseThread == 2){
+					remMean();
 				} else if(chooseThread == 3) {
+					mixWaves(read_address1, read_address2);
+				} else if(chooseThread == 4) {
+					osThreadTerminate(blinkThreadTaskHandle);
+					BSP_QSPI_Erase_Chip();
+					osThreadCreate(osThread(blinkTask), NULL);
+					while(1){};
+				}
+				**/
+				if(chooseThread == 1) {
+					remMean();
+				} else if(chooseThread == 2) {
 					osThreadTerminate(blinkThreadTaskHandle);
 					BSP_QSPI_Erase_Chip();
 					osThreadCreate(osThread(blinkTask), NULL);
@@ -551,6 +639,49 @@ int unmixedWaves(uint32_t readAddress1, uint32_t readAddress2){
 	return 1;
 }
 
+void mult(){
+	
+	arm_matrix_instance_f32 matrix_1;
+	arm_matrix_instance_f32 matrix_2;
+	arm_matrix_instance_f32 matrix_res;
+	
+	float32_t data_1[4];
+	float32_t data_2[4];
+	float32_t data_res[4];
+	
+/*	
+	matrix_1.numCols = 2;
+	matrix_1.numRows = 2;
+	matrix_1.pData = data_1;
+	
+	matrix_2.numCols = 2;
+	matrix_2.numRows = 2;
+	matrix_2.pData = data_2;
+	*/
+	
+	arm_mat_init_f32(&matrix_1, 2, 2, data_1);
+	arm_mat_init_f32(&matrix_2, 2, 2, data_2);
+	arm_mat_init_f32(&matrix_res, 2, 2, data_res);
+	
+	data_1[0] = 1;
+	data_1[1] = 2;
+	data_1[2] = 3;
+	data_1[3] = 4;
+	
+	data_2[0] = 5;
+	data_2[1] = 6;
+	data_2[2] = 7;
+	data_2[3] = 8;
+	
+	arm_mat_mult_f32(&matrix_1, &matrix_2, &matrix_res);
+	
+	for(int i = 0; i < 4; i++){
+		memset(buffer, 0 ,strlen(buffer));
+		sprintf(buffer, "%.2f\n", data_res[i]);
+		HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000); 
+	}
+	
+}
 
 
 void sineWave(float freq, uint32_t write_address) {
@@ -600,6 +731,384 @@ void blinkThread(void const *arg){
 		HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_14);
 		osDelay(1000);
 	}
+}
+
+
+void remMean(void){
+	int mean1 = 0;
+	int mean2 = 0;
+	int sum1 = 0;
+	int sum2 = 0;
+	
+	for(int i = 0; i < NUMBER_OF_SAMPLES; i++){
+		sum1 += x1[i];
+		sum2 += x2[i];
+	}
+	
+	means[0] = sum1/NUMBER_OF_SAMPLES;
+	means[1] = sum2/NUMBER_OF_SAMPLES;
+	
+	int index = 0;
+	
+	float32_t removedMean1[NUMBER_OF_SAMPLES]; //x1 - mean
+	float32_t removedMean2[NUMBER_OF_SAMPLES]; //x1 - mean
+	
+	int temp1 = write_address3;
+	int temp2 = write_address4;
+	
+	
+	for(int i = 0; i < NUMBER_OF_SAMPLES; i++){
+		
+		removedMean1[index] = x1[i] - means[0];
+		removedMean2[index++] = x2[i] - means[1];
+		
+		if(index == 10){
+			BSP_QSPI_Write((uint8_t *) removedMean1, temp1, 40);
+			BSP_QSPI_Write((uint8_t *) removedMean2, temp2, 40);
+			index = 0;
+			temp1 += 40;
+			temp2 += 40;
+			memset(removedMean1, 0, 40);
+			memset(removedMean2, 0, 40);
+		}
+		
+	}
+	
+	memset(buffer, 0, strlen(buffer));
+	sprintf(buffer, "mean 1: %d mean 2: %d\n", (uint8_t) means[0], (uint8_t) means[1]);
+	HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+	
+	memset(removedMean1, 0, 40);
+	memset(removedMean2, 0, 40);
+	BSP_QSPI_Read((uint8_t *)removedMean1, read_address3, 40);
+	BSP_QSPI_Read((uint8_t *)removedMean2, read_address4, 40);
+	
+	for(int i=0; i<NUMBER_OF_SAMPLES; i++) {
+		memset(buffer, 0, strlen(buffer));
+		sprintf(buffer, "value 1: %.2f value 2: %.2f\n", removedMean1[i], removedMean2[i]);
+		HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+	}
+	
+}
+
+/**
+
+**/
+void cov(){
+	
+	for(int i = 0; i<32000; i++){
+		var1 += x1[i] * x1[i];
+		cov1 += x1[i] * x2[i];
+		cov2 += x2[i] * x1[i];
+		var2 += x2[i] * x2[i];
+	}
+	
+	var1 = var1/2;
+	cov1 = cov1/2;
+	var2 = var2/2;
+	cov2 = cov2/2;
+}
+
+void eigValues(){
+	
+	float32_t sqrtExp = 0;
+	float32_t sqrtVals[2];
+	float32_t sumVar = var1 + var2;
+	
+	sqrtExp = (var1 + var2)*(var1 + var2) - 4*((var1*var2) - (cov1*cov2));
+	arm_sqrt_f32(sqrtExp, &sqrtVals[0]);
+	arm_sqrt_f32(sqrtExp, &sqrtVals[1]);
+	
+	sqrtVals[1] = -1*sqrtVals[1];
+	
+	eig[0] = (sumVar + sqrtVals[0])/2;
+	eig[1] = (sumVar + sqrtVals[1])/2;
+	
+	eigDiagMatrixData[0] = eig[0];
+	eigDiagMatrixData[1] = 0;
+	eigDiagMatrixData[2] = 0;
+	eigDiagMatrixData[3] = eig[1];
+	
+}
+
+void eigVectors(){
+	simultSolve(var1 - eig[0], cov1, cov2, var2 - eig[0], sols1);
+	simultSolve(var1 - eig[1], cov1, cov2, var2 - eig[1], sols2);
+	
+	eigVecMatrixData[0] = sols1[0];		//x1
+	eigVecMatrixData[1] = sols2[0];		//x2
+	eigVecMatrixData[2] = sols1[1];		//y1
+	eigVecMatrixData[3] = sols2[1];		//y2
+}
+
+float32_t * simultSolve(float32_t a, float32_t b, float32_t p, float32_t q, float32_t * sols){
+
+	float32_t x, y;
+	
+	float32_t c = 0;
+	float32_t r = 0;
+	
+	if(((a*q-p*b)!=0)&&((b*p-q*a)!=0))
+	{//In this case we have a unique solution and display x and y
+		x=(c*q-r*b)/(a*q-p*b);
+		y=(c*p-r*a)/(b*p-q*a);
+	}
+	else if(((a*q-p*b)==0)&&((b*p-q*a)==0)&&((c*q-r*b)==0)&&((c*p-r*a)==0))//In such condition we can have infinitely many solutions to the equation.
+	{//When we have such a condition than mathematically we can choose any one unknown as free and other unknown can be calculated using the free variables's value.
+	//So we choose x as free variable and then get y
+	    x = 1;
+	    y = (c/b) + ((-1*a/b)*x); 
+	}
+
+	sols[0] = x;
+	sols[1] = y;
+	
+	return sols;
+}
+
+void whiteEnv(){
+	
+	arm_matrix_instance_f32 eigDiagMatrix_sqrt;
+	float32_t eigDiagMatrix_sqrtData[4];
+	arm_mat_init_f32(&eigDiagMatrix_sqrt, 2, 2, eigDiagMatrix_sqrtData);
+	
+	arm_matrix_instance_f32 eigDiagMatrix_inv;
+	float32_t eigDiagMatrix_invData[4];
+	arm_mat_init_f32(&eigDiagMatrix_sqrt, 2, 2, eigDiagMatrix_invData);
+	
+	
+	arm_matrix_instance_f32 eigVecMatrix_trans;
+	float32_t eigVecMatrix_transData[4];	
+	arm_mat_init_f32(&eigDiagMatrix_sqrt, 2, 2, eigVecMatrix_transData);
+	
+	
+	//Calculating sqrt
+	for(int i = 0; i < 4; i++){
+		arm_sqrt_f32(eigDiagMatrixData[i], &eigDiagMatrix_sqrtData[i]);
+	}
+	
+	arm_mat_inverse_f32(&eigDiagMatrix_sqrt, &eigDiagMatrix_inv);
+	arm_mat_trans_f32(&eigVecMatrix, &eigVecMatrix_trans);
+	
+	arm_mat_mult_f32(&eigDiagMatrix_inv, &eigVecMatrix_trans, &whiteningMatrix);
+	arm_mat_mult_f32(&eigVecMatrix, &eigDiagMatrix_sqrt, &dewhiteningMatrix);
+	arm_mat_mult_f32(&eigDiagMatrix_inv, &eigVecMatrix_trans, &whiteningMatrix);
+	
+}
+
+void storeSignals(uint32_t write_address, uint8_t * signal){
+	memset(bufferValues, 0, 100);
+	int index = 0;
+	for(int i=0; i<32000; i++) {
+		bufferValues[index++] = signal[i];
+		
+		if(index == 100) {
+				BSP_QSPI_Write((uint8_t *) bufferValues, write_address, 100);
+				memset(bufferValues, 0, 100);
+				index = 0;
+				write_address += 100;
+		}
+	}
+}
+void fpica() {
+	int numRows = 2;
+	int numCols = 32000;
+
+	//A Matrix
+	arm_matrix_instance_f32 A;
+	float32_t Adata[4];
+	arm_mat_init_f32(&A, numRows, numRows, Adata);
+	
+	//W Matrix
+	arm_matrix_instance_f32 W;
+	float32_t Wdata[4];
+	arm_mat_init_f32(&W, numRows, numRows, Wdata);
+	
+	//B Matrix
+	arm_matrix_instance_f32 B;
+	float32_t Bdata[4] = {0.0, 0.0, 0.0, 0.0};
+	arm_mat_init_f32(&B, numRows, numRows, Bdata);
+	
+	//B' Matrix
+	arm_matrix_instance_f32 Btranspose;
+	float32_t BtransposeData[4];
+	arm_mat_init_f32(&Btranspose, numRows, numRows, BtransposeData);
+	
+	//Do the transpose
+	arm_mat_trans_f32(&B, &Btranspose);
+	
+	
+	for(int i=0; i<numRows; i++) {
+		//w Matrix
+		arm_matrix_instance_f32 w;
+		float32_t wData[2] = {RandomNumber(4), RandomNumber(4)};
+		arm_mat_init_f32(&w, 2, 1, wData);
+		
+		//w old
+		arm_matrix_instance_f32 wOld;
+		float32_t wOldData[2] = {0.0, 0.0};
+		arm_mat_init_f32(&w, 2, 1, wOldData);
+		
+		//B*B'
+		arm_matrix_instance_f32 BtimesBtranspose;
+		float32_t BtimesBtransposeData[4];
+		arm_mat_init_f32(&w, 2, 2, BtimesBtransposeData);
+		
+		//B*B'*w
+		arm_matrix_instance_f32 BtimesBtransposetimesw;
+		float32_t BtimesBtransposetimeswData[2];
+		arm_mat_init_f32(&w, 2, 1, BtimesBtransposetimeswData);
+		
+		//Do the multiplication
+		arm_mat_mult_f32(&B, &Btranspose, &BtimesBtranspose);
+		arm_mat_mult_f32(&BtimesBtranspose, &w, &BtimesBtransposetimesw);
+		arm_mat_sub_f32(&w, &BtimesBtransposetimesw, &w);
+		
+		//Normalize w
+		float32_t wNorm = normalize(wData, 2);
+		wNorm = 1 / wNorm;
+		arm_mat_scale_f32(&w, wNorm, &w);
+		
+		for(int j=0; j<MAX_NUMBER_OF_ITERATIONS; j++) {
+			arm_mat_mult_f32(&B, &Btranspose, &BtimesBtranspose);
+			arm_mat_mult_f32(&BtimesBtranspose, &w, &BtimesBtransposetimesw);
+			arm_mat_sub_f32(&w, &BtimesBtransposetimesw, &w);
+			
+			//w-wOld
+			arm_matrix_instance_f32 wminuswOld;
+			float32_t wminuswOldData[2];
+			arm_mat_init_f32(&wminuswOld, 2, 1, wminuswOldData);
+			arm_mat_sub_f32(&w, &wOld, &wminuswOld);
+			float32_t wminuswOldNorm = normalize(wminuswOldData, 2);
+			
+			//w+wOld
+			arm_matrix_instance_f32 wpluswOld;
+			float32_t wpluswOldData[2];
+			arm_mat_init_f32(&wpluswOld, 2, 1, wpluswOldData);
+			arm_mat_add_f32(&w, &wOld, &wpluswOld);
+			float32_t wpluswOldNorm = normalize(wpluswOldData, 2);
+			
+			if(wminuswOldNorm < epsilon || wpluswOldNorm < epsilon) {
+				if(i==0) {
+					Bdata[0] = wData[0];
+					Bdata[2] = wData[1];
+					Adata[0] = (dewhiteningMatrixData[0]*wData[0])+(dewhiteningMatrixData[1]*wData[1]);
+					Adata[2] = (dewhiteningMatrixData[2]*wData[0])+(dewhiteningMatrixData[3]*wData[1]);
+					Wdata[0] = (wData[0]*whiteningMatrixData[0])+(wData[1]*whiteningMatrixData[2]);
+					Wdata[1] = (wData[0]*whiteningMatrixData[1])+(wData[1]*whiteningMatrixData[3]);
+				} else if(i==1) {
+					Bdata[1] = wData[0];
+					Bdata[3] = wData[1];
+					Adata[1] = (dewhiteningMatrixData[0]*wData[0])+(dewhiteningMatrixData[1]*wData[1]);
+					Adata[3] = (dewhiteningMatrixData[2]*wData[0])+(dewhiteningMatrixData[3]*wData[1]);
+					Wdata[2] = (wData[0]*whiteningMatrixData[0])+(wData[1]*whiteningMatrixData[2]);
+					Wdata[3] = (wData[0]*whiteningMatrixData[1])+(wData[1]*whiteningMatrixData[3]);
+				}
+				break;
+			}
+			
+			wOld.pData = w.pData;
+			
+			float32_t whiteSigBuf1[100];
+			float32_t whiteSigBuf2[100];
+			float32_t result[100];
+			
+			uint32_t temp5 = read_address5;
+			uint32_t temp6 = read_address6;
+			uint32_t temp7 = read_address7;
+			
+			for(int i=0; i<320; i++) {
+				memset(whiteSigBuf1, 0, 400);
+				memset(whiteSigBuf2, 0, 400);
+				memset(result, 0, 400);
+				BSP_QSPI_Read((uint8_t *)whiteSigBuf1, temp5, 400);
+				BSP_QSPI_Read((uint8_t *)whiteSigBuf2, temp6, 400);
+				temp5+=400;
+				temp6+=400;
+				
+				for(int j=0; j<100; j++) {
+					result[i] = (whiteSigBuf1[i]*wData[0])+(whiteSigBuf2[i]*wData[1]);
+					result[i] = result[i]*result[i]*result[i]; 
+				}
+				
+				BSP_QSPI_Write((uint8_t *)result, temp7, 400);
+				temp7+=400;
+			}
+			
+			temp5 = read_address5;
+			temp6 = read_address6;
+			temp7 = read_address7;
+			float32_t sums[2];
+			
+			for(int i=0; i<320; i++) {
+				memset(whiteSigBuf1, 0, 400);
+				memset(whiteSigBuf2, 0, 400);
+				memset(result, 0, 400);
+				BSP_QSPI_Read((uint8_t *)whiteSigBuf1, temp5, 400);
+				BSP_QSPI_Read((uint8_t *)whiteSigBuf2, temp6, 400);
+				BSP_QSPI_Read((uint8_t *)result, temp7, 400);
+				temp5+=400;
+				temp6+=400;
+				temp7+=400;
+				
+				for(int j=0; j<100; j++) {
+					sums[0] += whiteSigBuf1[j]*result[j];
+					sums[1] += whiteSigBuf2[j]*result[j];
+				}
+			}
+			
+			sums[0] = sums[0]/32000;
+			sums[1] = sums[1]/32000;
+			sums[0] = sums[0] - (3*wData[0]);
+			sums[1] = sums[1] - (3*wData[1]);
+			float32_t normSums = normalize(sums, 2);
+			sums[0] = sums[0]/normSums;
+			sums[1] = sums[1]/normSums;
+			
+			w.pData[0] = sums[0];
+			w.pData[1] = sums[1];
+		}
+	}
+}
+
+void addMean(){
+	float32_t buff1[100];
+	float32_t buff2[100];
+	int index = 0;
+	int temp1 = write_address8;
+	int temp2 = write_address9;
+
+	float32_t newMeans[2];
+		
+	newMeans[0] = (Wdata[0] * means[0]) + (Wdata[1] * means[1]);
+	newMeans[1] = (Wdata[2] * means[0]) + (Wdata[3] * means[1]);
+	
+	for(int i = 0; i < 32000; i++){
+		buff1[index] = (Wdata[0] * x1[i]) + (Wdata[1] * x2[i]) + newMeans[0];
+		buff2[index++] = (Wdata[2] * x1[i]) + (Wdata[3] * x2[i]) + newMeans[1];
+		if(index == 100){
+			BSP_QSPI_Write((uint8_t *) buff1, temp1, 400);
+			BSP_QSPI_Write((uint8_t *) buff2, temp2, 400);
+			index = 0;
+			temp1 += 400;
+			temp2 += 400;
+			memset(buff1, 0 ,400);
+			memset(buff2, 0 ,400);
+		}
+	}
+}
+
+float32_t normalize(float32_t vector[], int length) {
+	float32_t wNorm;
+	for(int i=0; i<length; i++) {
+			wNorm += vector[i]*vector[i];
+	}
+	arm_sqrt_f32(wNorm, &wNorm);
+	return wNorm;
+}
+
+float32_t RandomNumber(float Max){
+    return (2 * (double)rand() / (double)RAND_MAX - 1)*Max;
 }
 
 /**
