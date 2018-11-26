@@ -176,6 +176,7 @@ void remMean(void);
 void eigValues(void);
 void eigVectors(void);
 void mult(void);
+void squareRoot(float32_t a);
 void remMean(void);
 void fpica(void);
 void eraseMemory();
@@ -264,19 +265,19 @@ int main(void)
   /* USER CODE END RTOS_TIMERS */
 
   /* Create the thread(s) */
-	sineWave(freq1, write_address1);
-	transmitSineWave(read_address1);
+	//sineWave(freq1, write_address1);
+	//transmitSineWave(read_address1);
 
-	sineWave(freq2, write_address2);
-	transmitSineWave(read_address2);
+	//sineWave(freq2, write_address2);
+	//transmitSineWave(read_address2);
 					
-	unmixedWaves(read_address1,read_address2);
+	//unmixedWaves(read_address1,read_address2);
 	//mixWaves(read_address1, read_address2);
 	//BSP_QSPI_EnableMemoryMappedMode();
 
   /* USER CODE BEGIN RTOS_THREADS */
-	osThreadDef(soundTask, soundThread, osPriorityNormal, 0, 128);
-	soundThreadTaskHandle = osThreadCreate(osThread(soundTask), NULL);
+	//osThreadDef(soundTask, soundThread, osPriorityNormal, 0, 128);
+	//soundThreadTaskHandle = osThreadCreate(osThread(soundTask), NULL);
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
@@ -285,13 +286,15 @@ int main(void)
  
 
   /* Start scheduler */
-  osKernelStart();
+  //osKernelStart();
   
   /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-	
+	squareRoot(25.0);
+	squareRoot(36.0);
+	squareRoot(99.0);
 	
 	while (1)
   {
@@ -596,17 +599,6 @@ void soundThread(void const * argument) {
 		}
 }
 
-void soundThreadUnmixed(void const * argument) {
-		int index = 0;
-		while(1) {
-			if(index == 32000) index = 0;
-			
-			HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_8B_R, x1[index]);
-			HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_8B_R, x2[index]);
-			index++;
-		}
-}
-
 void eraseMemory() {
 		int status = 0;
 		for(int i=0; i<256; i++) {
@@ -655,6 +647,16 @@ int unmixedWaves(uint32_t readAddress1, uint32_t readAddress2){
 	BSP_QSPI_Read(x2, readAddress2, 32000);
 	
 	return 1;
+}
+
+void squareRoot(float32_t a) {
+	float32_t ans;
+	
+	arm_sqrt_f32(a, &ans);
+	memset(buffer, 0, strlen(buffer));
+	sprintf(buffer, "%0.3f\n", ans);
+	HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000); 
+	
 }
 
 void mult(){
@@ -796,6 +798,7 @@ void remMean(void){
 	sprintf(buffer, "mean 1: %d mean 2: %d\n", (uint8_t) means[0], (uint8_t) means[1]);
 	HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
 	
+	/**
 	memset(removedMean1, 0, 40);
 	memset(removedMean2, 0, 40);
 	BSP_QSPI_Read((uint8_t *)removedMean1, read_address3+127960, 40);
@@ -806,7 +809,7 @@ void remMean(void){
 		sprintf(buffer, "value 1: %.2f value 2: %.2f\n", removedMean1[i], removedMean2[i]);
 		HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
 	}
-	
+	**/
 }
 
 /**
