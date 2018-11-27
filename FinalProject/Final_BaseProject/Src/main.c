@@ -176,6 +176,7 @@ void remMean(void);
 void eigValues(void);
 void eigVectors(void);
 void mult(void);
+void cov();
 void squareRoot(float32_t a);
 void remMean(void);
 void fpica(void);
@@ -265,13 +266,13 @@ int main(void)
   /* USER CODE END RTOS_TIMERS */
 
   /* Create the thread(s) */
-	//sineWave(freq1, write_address1);
+	sineWave(freq1, write_address1);
 	//transmitSineWave(read_address1);
 
-	//sineWave(freq2, write_address2);
+	sineWave(freq2, write_address2);
 	//transmitSineWave(read_address2);
 					
-	//unmixedWaves(read_address1,read_address2);
+	unmixedWaves(read_address1,read_address2);
 	//mixWaves(read_address1, read_address2);
 	//BSP_QSPI_EnableMemoryMappedMode();
 
@@ -292,10 +293,8 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-	squareRoot(25.0);
-	squareRoot(36.0);
-	squareRoot(99.0);
-	
+	remMean();
+	//cov();
 	while (1)
   {
   /* USER CODE END WHILE */
@@ -770,26 +769,27 @@ void remMean(void){
 	
 	int index = 0;
 	
-	float32_t removedMean1[10]; //x1 - mean
-	float32_t removedMean2[10]; //x1 - mean
+	float32_t removedMean1[100]; //x1 - mean
+	float32_t removedMean2[100]; //x1 - mean
 	
 	int temp1 = write_address3;
 	int temp2 = write_address4;
 	
 	
-	for(int i = 0; i < NUMBER_OF_SAMPLES; i++){
+	for(int i = 0; i < 320; i++){
 		
 		removedMean1[index] = x1[i] - means[0];
 		removedMean2[index++] = x2[i] - means[1];
 		
-		if(index == 10){
-			BSP_QSPI_Write((uint8_t *) removedMean1, temp1, 40);
-			BSP_QSPI_Write((uint8_t *) removedMean2, temp2, 40);
+		if(index == 100){
+			BSP_QSPI_Write((uint8_t *) removedMean1, temp1, 400);
+			BSP_QSPI_Write((uint8_t *) removedMean2, temp2, 400);
 			index = 0;
-			temp1 += 40;
-			temp2 += 40;
-			memset(removedMean1, 0, 40);
-			memset(removedMean2, 0, 40);
+			temp1 += 400;
+			temp2 += 400;
+			memset(removedMean1, 0, 400);
+			memset(removedMean2, 0, 400);
+			HAL_Delay(2000);
 		}
 		
 	}
@@ -798,25 +798,44 @@ void remMean(void){
 	sprintf(buffer, "mean 1: %d mean 2: %d\n", (uint8_t) means[0], (uint8_t) means[1]);
 	HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
 	
-	/**
-	memset(removedMean1, 0, 40);
-	memset(removedMean2, 0, 40);
-	BSP_QSPI_Read((uint8_t *)removedMean1, read_address3+127960, 40);
-	BSP_QSPI_Read((uint8_t *)removedMean2, read_address4+127960, 40);
+	memset(removedMean1, 0, 400);
+	memset(removedMean2, 0, 400);
+	BSP_QSPI_Read((uint8_t *)removedMean1, read_address3, 400);
+	BSP_QSPI_Read((uint8_t *)removedMean2, read_address4, 400);
 	
-	for(int i=0; i<10; i++) {
+	for(int i=0; i<100; i++) {
 		memset(buffer, 0, strlen(buffer));
 		sprintf(buffer, "value 1: %.2f value 2: %.2f\n", removedMean1[i], removedMean2[i]);
 		HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
 	}
-	**/
 }
 
 /**
 
 **/
 void cov(){
+	float32_t removedMean1[100]; //x1 - mean
+	float32_t removedMean2[100]; //x1 - mean
+	int temp1 = read_address3;
+	int temp2 = read_address4;
 	
+	
+	for(int j=0; j<20; j++) {
+		//memset(removedMean1, 0, 400);
+		memset(removedMean2, 0, 400);
+		//BSP_QSPI_Read((uint8_t *)removedMean1, temp1, 400);
+		BSP_QSPI_Read((uint8_t *)removedMean2, temp2, 400);
+		//temp1+=400;
+		temp2+=400;
+		for(int i=0; i<100; i++) {
+			memset(buffer, 0, strlen(buffer));
+			sprintf(buffer, "value 1: %.2f\n", removedMean2[i]);
+			HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+		}
+		HAL_Delay(2000);
+	}
+	
+	/**
 	for(int i = 0; i<32000; i++){
 		var1 += x1[i] * x1[i];
 		cov1 += x1[i] * x2[i];
@@ -828,6 +847,7 @@ void cov(){
 	cov1 = cov1/2;
 	var2 = var2/2;
 	cov2 = cov2/2;
+	**/
 }
 
 void eigValues(){
