@@ -294,7 +294,9 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	remMean();
-	//cov();
+	cov();
+	eigValues();
+	eigVectors();
 	while (1)
   {
   /* USER CODE END WHILE */
@@ -759,13 +761,13 @@ void remMean(void){
 	int sum1 = 0;
 	int sum2 = 0;
 	
-	for(int i = 0; i < 1000; i++){
+	for(int i = 0; i < 1600; i++){
 		sum1 += x1[i];
 		sum2 += x2[i];
 	}
 	
-	means[0] = sum1/1000;
-	means[1] = sum2/1000;
+	means[0] = sum1/1600;
+	means[1] = sum2/1600;
 	
 	int index = 0;
 	
@@ -776,7 +778,7 @@ void remMean(void){
 	int temp2 = write_address4;
 	
 	
-	for(int i = 0; i < 1000; i++){
+	for(int i = 0; i < 1600; i++){
 		
 		removedMean1[index] = x1[i] - means[0];
 		removedMean2[index++] = x2[i] - means[1];
@@ -794,6 +796,7 @@ void remMean(void){
 		
 	}
 	
+	/**
 	memset(buffer, 0, strlen(buffer));
 	sprintf(buffer, "mean 1: %d mean 2: %d\n", (uint8_t) means[0], (uint8_t) means[1]);
 	HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
@@ -840,7 +843,7 @@ void remMean(void){
 		memset(buffer, 0, strlen(buffer));
 		sprintf(buffer, "value 1: %.2f value 2: %.2f\n", removedMean1[i], removedMean2[i]);
 		HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
-	}
+	}**/
 }
 
 /**
@@ -851,36 +854,37 @@ void cov(){
 	float32_t removedMean2[100]; //x1 - mean
 	int temp1 = read_address3;
 	int temp2 = read_address4;
+	float32_t sum1 = 0;
+	float32_t sum2 = 0;
 	
 	
-	for(int j=0; j<20; j++) {
-		//memset(removedMean1, 0, 400);
+	for(int j=0; j<16; j++) {
+		memset(removedMean1, 0, 400);
 		memset(removedMean2, 0, 400);
-		//BSP_QSPI_Read((uint8_t *)removedMean1, temp1, 400);
+		BSP_QSPI_Read((uint8_t *)removedMean1, temp1, 400);
 		BSP_QSPI_Read((uint8_t *)removedMean2, temp2, 400);
-		//temp1+=400;
+		temp1+=400;
 		temp2+=400;
 		for(int i=0; i<100; i++) {
-			memset(buffer, 0, strlen(buffer));
-			sprintf(buffer, "value 1: %.2f\n", removedMean2[i]);
-			HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+			var1 += (removedMean1[i] * removedMean1[i]);
+			cov1 += (removedMean1[i] * removedMean2[i]);
+			cov2 = cov1;
+			var2 += (removedMean2[i] * removedMean2[i]);
+			//sum1+=removedMean1[i];
+			//sum2+=removedMean2[i];
 		}
 		HAL_Delay(2000);
 	}
 	
-	/**
-	for(int i = 0; i<32000; i++){
-		var1 += x1[i] * x1[i];
-		cov1 += x1[i] * x2[i];
-		cov2 += x2[i] * x1[i];
-		var2 += x2[i] * x2[i];
-	}
+	var1 = var1/1600;
+	cov1 = cov1/1600;
+	cov2 = cov2/1600;
+	var2 = var2/1600;
 	
-	var1 = var1/2;
-	cov1 = cov1/2;
-	var2 = var2/2;
-	cov2 = cov2/2;
-	**/
+	memset(buffer, 0, strlen(buffer));
+	sprintf(buffer, "var 1: %.2f cov 1: %.2f\ncov 2: %.2f var 2: %.2f\n", var1, cov1, cov2, var2);
+	//sprintf(buffer, "sum 1: %.2f sum 2: %.2f\n", sum1, sum2);
+	HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
 }
 
 void eigValues(){
@@ -903,39 +907,52 @@ void eigValues(){
 	eigDiagMatrixData[2] = 0;
 	eigDiagMatrixData[3] = eig[1];
 	
+	memset(buffer, 0 ,strlen(buffer));
+	sprintf(buffer, "eig1: %.2f eig2: %.2f\n", eig[0], eig[1]);
+	HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000); 
 }
 
 void eigVectors(){
 	simultSolve(var1 - eig[0], cov1, cov2, var2 - eig[0], sols1);
 	simultSolve(var1 - eig[1], cov1, cov2, var2 - eig[1], sols2);
+	//simultSolve(1, 1, -2, -2, sols1);
+	//simultSolve(2,1,-2,-1, sols2);
 	
 	eigVecMatrixData[0] = sols1[0];		//x1
 	eigVecMatrixData[1] = sols2[0];		//x2
 	eigVecMatrixData[2] = sols1[1];		//y1
 	eigVecMatrixData[3] = sols2[1];		//y2
+	
+	//memset(buffer, 0 ,strlen(buffer));
+	//sprintf(buffer, "x1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", sols1[0], sols2[0], sols1[1], sols2[1]);
+	//HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000); 
 }
 
 float32_t * simultSolve(float32_t a, float32_t b, float32_t p, float32_t q, float32_t * sols){
 
-	float32_t x, y;
+	float64_t x, y;
 	
-	float32_t c = 0;
-	float32_t r = 0;
+	float64_t c = 0;
+	float64_t r = 0;
 	
-	if(((a*q-p*b)!=0)&&((b*p-q*a)!=0))
+	//if(((a*q-p*b)!=0)&&((b*p-q*a)!=0))
 	{//In this case we have a unique solution and display x and y
-		x=(c*q-r*b)/(a*q-p*b);
-		y=(c*p-r*a)/(b*p-q*a);
+		//x=(c*q-r*b)/(a*q-p*b);
+		//y=(c*p-r*a)/(b*p-q*a);
 	}
-	else if(((a*q-p*b)==0)&&((b*p-q*a)==0)&&((c*q-r*b)==0)&&((c*p-r*a)==0))//In such condition we can have infinitely many solutions to the equation.
-	{//When we have such a condition than mathematically we can choose any one unknown as free and other unknown can be calculated using the free variables's value.
+	//else if(((a*q-p*b)==0)&&((b*p-q*a)==0)&&((c*q-r*b)==0)&&((c*p-r*a)==0)){//In such condition we can have infinitely many solutions to the equation.
+	//else {//When we have such a condition than mathematically we can choose any one unknown as free and other unknown can be calculated using the free variables's value.
 	//So we choose x as free variable and then get y
 	    x = 1;
 	    y = (c/b) + ((-1*a/b)*x); 
-	}
+	//}
 
 	sols[0] = x;
 	sols[1] = y;
+	
+	memset(buffer, 0 ,strlen(buffer));
+	sprintf(buffer, "x1: %.4f y1: %.4f\n", x, y);
+	HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000); 
 	
 	return sols;
 }
