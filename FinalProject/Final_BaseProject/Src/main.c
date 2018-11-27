@@ -272,8 +272,8 @@ int main(void)
 	sineWave(freq2, write_address2);
 	//transmitSineWave(read_address2);
 					
-	unmixedWaves(read_address1,read_address2);
-	//mixWaves(read_address1, read_address2);
+	//unmixedWaves(read_address1,read_address2);
+	mixWaves(read_address1, read_address2);
 	//BSP_QSPI_EnableMemoryMappedMode();
 
   /* USER CODE BEGIN RTOS_THREADS */
@@ -632,9 +632,9 @@ int mixWaves(uint32_t readAddress1, uint32_t readAddress2){
 		
 		x1[i] = (uint8_t)X1;
 		x2[i] = (uint8_t)X2;
-		memset(buffer, 0 ,strlen(buffer));
-		sprintf(buffer, "%d\n", x1[i]);
-		HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+		//memset(buffer, 0 ,strlen(buffer));
+		//sprintf(buffer, "%d\n", x1[i]);
+		//HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
 	}
 	
 	return 1;
