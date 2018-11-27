@@ -115,10 +115,10 @@ uint32_t read_address9 = ((uint32_t)0xC3500);
 uint8_t x1[NUMBER_OF_SAMPLES];
 uint8_t x2[NUMBER_OF_SAMPLES];
 //coefficients
-int a11 = 1;
-int a12 = 2;
-int a21 = 3;
-int a22 = 4;
+float32_t a11 = 0.9794;
+float32_t a12 = -0.5484;
+float32_t a21 = -0.2656;
+float32_t a22 = -0.0963;
 
 //FAST ICA//
 int means[2];
@@ -171,7 +171,7 @@ static void MX_DAC1_Init(void);
 void StartDefaultTask(void const * argument);
 void blinkThread(void const *arg);
 void soundThread(void const *arg);
-void sineWave(float freq, uint32_t write_address);
+void sineWave(float freq, int write_address);
 void remMean(void);
 void eigValues(void);
 void eigVectors(void);
@@ -181,8 +181,9 @@ void squareRoot(float32_t a);
 void remMean(void);
 void fpica(void);
 void eraseMemory();
-int transmitSineWave(uint32_t readAddress);
-int mixWaves(uint32_t readAddress1, uint32_t readAddress2);
+int transmitSineWave(int readAddress);
+void readMixWaves(int readAddress1, int readAddress2);
+int mixWaves(int readAddress1, int readAddress2);
 int unmixedWaves(uint32_t readAddress1, uint32_t readAddress2);
 float32_t RandomNumber(float Max);
 float32_t normalize(float32_t vector[], int length);
@@ -268,12 +269,14 @@ int main(void)
   /* Create the thread(s) */
 	sineWave(freq1, write_address1);
 	//transmitSineWave(read_address1);
-
+	//BSP_QSPI_Erase_Chip();
+	//eraseMemory();
 	sineWave(freq2, write_address2);
 	//transmitSineWave(read_address2);
 					
 	//unmixedWaves(read_address1,read_address2);
 	mixWaves(read_address1, read_address2);
+	readMixWaves(read_address3, read_address4);
 	//BSP_QSPI_EnableMemoryMappedMode();
 
   /* USER CODE BEGIN RTOS_THREADS */
@@ -293,10 +296,10 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-	remMean();
-	cov();
-	eigValues();
-	eigVectors();
+	//remMean();
+	//cov();
+	//eigValues();
+	//eigVectors();
 	while (1)
   {
   /* USER CODE END WHILE */
@@ -615,33 +618,70 @@ void eraseMemory() {
 		}
 }
 
-int mixWaves(uint32_t readAddress1, uint32_t readAddress2){
-	BSP_QSPI_Read(x1, readAddress1, 32000);
-	BSP_QSPI_Read(x2, readAddress2, 32000);
-	float maxRangex1 = (255.0*a11) + (255.0*a12);
-	float maxRangex2 = (255.0*a21) + (255.0*a22);
-	for(int i = 0; i < 32000; i++){
-		float mult_11 = (float)a11*(float)x1[i];
-		float mult_12 = (float)a12*(float)x2[i];
-		float mult_21 = (float)a21*(float)x1[i];
-		float mult_22 = (float)a22*(float)x2[i];
-		float X1 = mult_11 + mult_12;
-		float X2 = mult_21 + mult_22;	
-		X1 = X1/maxRangex1;
-		X2 = X2/maxRangex2;
-		X1 = X1*254;
-		X2 = X2*254;
-		
-		x1[i] = (uint8_t)X1;
-		x2[i] = (uint8_t)X2;
-		//memset(buffer, 0 ,strlen(buffer));
-		//sprintf(buffer, "%d\n", x1[i]);
-		//HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
-	}
+int mixWaves(int readAddress1, int readAddress2){
+	float32_t buffer1[100];
+	float32_t buffer2[100];
+	int temp1 = readAddress1;
+	int temp2 = readAddress2;
+	int temp3 = write_address3;
+	int temp4 = write_address4;
 	
+	for(int i=0; i<16; i++) {
+		memset(buffer1, 0, 400);
+		memset(buffer2, 0, 400);
+		BSP_QSPI_Read((uint8_t *)buffer1, temp1, 400);
+		BSP_QSPI_Read((uint8_t *)buffer2, temp2, 400);
+		temp1+=400;
+		temp2+=400;
+		//HAL_UART_Transmit(&huart1, (uint8_t *)"Running\n", 8, 30000);
+		for(int j=0; j<100; j++) {
+			float32_t mult_11 = a11*buffer1[j];
+			float32_t mult_12 = a12*buffer2[j];
+			float32_t mult_21 = a21*buffer1[j];
+			float32_t mult_22 = a22*buffer2[j];
+			float32_t X1 = mult_11 + mult_12;
+			float32_t X2 = mult_21 + mult_22;	
+			
+			buffer1[j] = X1;
+			buffer2[j] = X2;
+		}
+		BSP_QSPI_Write((uint8_t *)buffer1, temp3, 400);
+		BSP_QSPI_Write((uint8_t *)buffer2, temp4, 400);
+		temp3+=400;
+		temp4+=400;
+		memset(buffer1, 0, 400);
+		memset(buffer2, 0, 400);
+		//HAL_Delay(2000);
+	}
+
+	//memset(buffer, 0 ,strlen(buffer));
+	//sprintf(buffer, "%d\n", x1[i]);
+
 	return 1;
 }
 
+void readMixWaves(int readAddress1, int readAddress2) {
+	float32_t buffer1[100];
+	float32_t buffer2[100];
+	
+	int temp1 = readAddress1;
+	int temp2 = readAddress2;
+	
+	for(int i=0; i<16; i++) {
+		memset(buffer1, 0, 400);
+		memset(buffer2, 0, 400);
+		BSP_QSPI_Read((uint8_t *)buffer1, temp1, 400);
+		BSP_QSPI_Read((uint8_t *)buffer2, temp2, 400);
+		temp1+=400;
+		temp2+=400;
+		
+		for(int j=0; j<100; j++) {
+			memset(buffer, 0, strlen(buffer));
+			sprintf(buffer, "value 1: %.2f value 2: %.2f\n", buffer1[j], buffer2[j]);
+			HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+		}
+	}
+}
 
 int unmixedWaves(uint32_t readAddress1, uint32_t readAddress2){	
 	BSP_QSPI_Read(x1, readAddress1, 32000);
@@ -705,45 +745,41 @@ void mult(){
 }
 
 
-void sineWave(float freq, uint32_t write_address) {
-	float sample;
-	uint8_t sample_int;
-	memset(bufferValues, 0, 100);
+void sineWave(float freq, int write_address) {
+	float32_t buffer[100];
+	memset(buffer, 0, 400);
+	int temp = write_address;
 	int index = 0;
-	for(int i=0; i<32000; i++) {
-		sample = arm_sin_f32(2 * PI * freq * i * (1/Ts));
-		sample = sample + 1.0;
-		sample = sample * 127.0;
-		sample_int = (uint8_t) sample;
-		bufferValues[index++] = sample_int;
+	for(int i=0; i<1600; i++) {
+		buffer[index++] = arm_sin_f32(2 * PI * freq * i * (1/Ts));
+		//sample = sample + 1.0;
+		//sample = sample * 127.0;
+		//sample_int = (uint8_t) sample;
+		//buffer[index++] = sample_int;
 		
 		if(index == 100) {
-				BSP_QSPI_Write((uint8_t *) bufferValues, write_address, 100);
-				memset(bufferValues, 0, 100);
+				BSP_QSPI_Write((uint8_t *) buffer, temp, 400);
+				memset(buffer, 0, 400);
 				index = 0;
-				write_address += 100;
+				temp += 400;
+				HAL_Delay(2000);
 		}
 	}
 }
 
-int transmitSineWave(uint32_t readAddress){
-	uint8_t readValue[100];
-	uint32_t temp = 0;
-	while(temp < 32000) {
-		
-		BSP_QSPI_Read(readValue, readAddress, 100);
-		memset(buffer, 0, strlen(buffer));
-		
-		for(int i = 0; i < 100; i++){					
-			sprintf(buffer, "%d\n", (uint8_t) readValue[i]);
+int transmitSineWave(int readAddress){
+	float32_t readValue[100];
+	int temp = readAddress;
+	for(int i=0; i<16; i++) {
+		memset(readValue, 0, 400);
+		BSP_QSPI_Read((uint8_t *)readValue, temp, 400);
+		temp+=400;
+		for(int j=0; j<100; j++) {
+			memset(buffer, 0, strlen(buffer));
+			sprintf(buffer, "%.3f\n", readValue[j]);
 			HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
 		}
-		
-		readAddress += 100;
-		temp +=100;
-		
 	}
-	HAL_UART_Transmit(&huart1, (uint8_t *)"\n", 1, 30000);
 	return 1;
 }
 
