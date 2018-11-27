@@ -776,7 +776,7 @@ void remMean(void){
 	int temp2 = write_address4;
 	
 	
-	for(int i = 0; i < 320; i++){
+	for(int i = 0; i < 1000; i++){
 		
 		removedMean1[index] = x1[i] - means[0];
 		removedMean2[index++] = x2[i] - means[1];
@@ -824,6 +824,17 @@ void remMean(void){
 	memset(removedMean2, 0, 400);
 	BSP_QSPI_Read((uint8_t *)removedMean1, read_address3+800, 400);
 	BSP_QSPI_Read((uint8_t *)removedMean2, read_address4+800, 400);
+	
+	for(int i=0; i<100; i++) {
+		memset(buffer, 0, strlen(buffer));
+		sprintf(buffer, "value 1: %.2f value 2: %.2f\n", removedMean1[i], removedMean2[i]);
+		HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+	}
+	
+				memset(removedMean1, 0, 400);
+	memset(removedMean2, 0, 400);
+	BSP_QSPI_Read((uint8_t *)removedMean1, read_address3+1200, 400);
+	BSP_QSPI_Read((uint8_t *)removedMean2, read_address4+1200, 400);
 	
 	for(int i=0; i<100; i++) {
 		memset(buffer, 0, strlen(buffer));
