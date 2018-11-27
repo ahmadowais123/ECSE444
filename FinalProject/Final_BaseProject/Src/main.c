@@ -808,6 +808,28 @@ void remMean(void){
 		sprintf(buffer, "value 1: %.2f value 2: %.2f\n", removedMean1[i], removedMean2[i]);
 		HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
 	}
+	
+		memset(removedMean1, 0, 400);
+	memset(removedMean2, 0, 400);
+	BSP_QSPI_Read((uint8_t *)removedMean1, read_address3+400, 400);
+	BSP_QSPI_Read((uint8_t *)removedMean2, read_address4+400, 400);
+	
+	for(int i=0; i<100; i++) {
+		memset(buffer, 0, strlen(buffer));
+		sprintf(buffer, "value 1: %.2f value 2: %.2f\n", removedMean1[i], removedMean2[i]);
+		HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+	}
+	
+			memset(removedMean1, 0, 400);
+	memset(removedMean2, 0, 400);
+	BSP_QSPI_Read((uint8_t *)removedMean1, read_address3+800, 400);
+	BSP_QSPI_Read((uint8_t *)removedMean2, read_address4+800, 400);
+	
+	for(int i=0; i<100; i++) {
+		memset(buffer, 0, strlen(buffer));
+		sprintf(buffer, "value 1: %.2f value 2: %.2f\n", removedMean1[i], removedMean2[i]);
+		HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+	}
 }
 
 /**
