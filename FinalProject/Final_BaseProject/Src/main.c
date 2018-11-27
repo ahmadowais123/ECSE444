@@ -276,7 +276,8 @@ int main(void)
 					
 	//unmixedWaves(read_address1,read_address2);
 	mixWaves(read_address1, read_address2);
-	readMixWaves(read_address3, read_address4);
+	//readMixWaves(read_address3, read_address4);
+	remMean();
 	//BSP_QSPI_EnableMemoryMappedMode();
 
   /* USER CODE BEGIN RTOS_THREADS */
@@ -792,50 +793,89 @@ void blinkThread(void const *arg){
 
 
 void remMean(void){
-	int mean1 = 0;
-	int mean2 = 0;
-	int sum1 = 0;
-	int sum2 = 0;
+	float32_t mean1 = 0;
+	float32_t mean2 = 0;
+	float32_t sum1 = 0;
+	float32_t sum2 = 0;
 	
-	for(int i = 0; i < 1600; i++){
-		sum1 += x1[i];
-		sum2 += x2[i];
-	}
+	float32_t buffer1[100];
+	float32_t buffer2[100];
 	
-	means[0] = sum1/1600;
-	means[1] = sum2/1600;
+	int temp1 = read_address3;
+	int temp2 = read_address4;
 	
-	int index = 0;
-	
-	float32_t removedMean1[100]; //x1 - mean
-	float32_t removedMean2[100]; //x1 - mean
-	
-	int temp1 = write_address3;
-	int temp2 = write_address4;
-	
-	
-	for(int i = 0; i < 1600; i++){
+	for(int i=0; i<16; i++) {
+		memset(buffer1, 0, 400);
+		memset(buffer2, 0, 400);
+		BSP_QSPI_Read((uint8_t *)buffer1, temp1, 400);
+		BSP_QSPI_Read((uint8_t *)buffer2, temp2, 400);
+		temp1+=400;
+		temp2+=400;
 		
-		removedMean1[index] = x1[i] - means[0];
-		removedMean2[index++] = x2[i] - means[1];
-		
-		if(index == 100){
-			BSP_QSPI_Write((uint8_t *) removedMean1, temp1, 400);
-			BSP_QSPI_Write((uint8_t *) removedMean2, temp2, 400);
-			index = 0;
-			temp1 += 400;
-			temp2 += 400;
-			memset(removedMean1, 0, 400);
-			memset(removedMean2, 0, 400);
-			HAL_Delay(2000);
+		for(int j=0; j<100; j++) {
+			sum1 += buffer1[j];
+			sum2 += buffer2[j];
 		}
-		
 	}
+	
+	mean1 = sum1/1600;
+	mean2 = sum2/1600;
+	
+	memset(buffer, 0, strlen(buffer));
+	sprintf(buffer, "mean 1: %.4f mean 2: %.4f\n", mean1, mean2);
+	HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+	
+	temp1 = read_address3;
+	temp2 = read_address4;
+	int temp3 = read_address5;
+	int temp4 = read_address6;
+	
+	sum1 = 0;
+	sum2 = 0;
+	
+	for(int i=0; i<16; i++) {
+		memset(buffer1, 0, 400);
+		memset(buffer2, 0, 400);
+		BSP_QSPI_Read((uint8_t *)buffer1, temp1, 400);
+		BSP_QSPI_Read((uint8_t *)buffer2, temp2, 400);
+		temp1+=400;
+		temp2+=400;
+		for(int j=0; j<100; j++) {
+			buffer1[j] = buffer1[j] - mean1;
+			buffer2[j] = buffer2[j] - mean2;
+			sum1 += buffer1[j];
+			sum2 += buffer2[j];
+		}
+		BSP_QSPI_Write((uint8_t *)buffer1, temp3, 400);
+		BSP_QSPI_Write((uint8_t *)buffer2, temp4, 400);
+		temp3+=400;
+		temp4+=400;
+		HAL_Delay(2000);
+	}
+	
+	temp3 = read_address5;
+	temp4 = read_address6;
+	
+	for(int i=0; i<16; i++) {
+		memset(buffer1, 0, 400);
+		memset(buffer2, 0, 400);
+		BSP_QSPI_Read((uint8_t *)buffer1, temp3, 400);
+		BSP_QSPI_Read((uint8_t *)buffer2, temp4, 400);
+		temp1+=400;
+		temp2+=400;
+		
+		for(int j=0; j<100; j++) {
+			memset(buffer, 0, strlen(buffer));
+			sprintf(buffer, "value 1: %.2f value 2: %.2f\n", buffer1[j], buffer2[j]);
+			HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+		}
+	}
+	
+	memset(buffer, 0, strlen(buffer));
+	sprintf(buffer, "sum 1: %.4f sum 2: %.4f\n", sum1, sum2);
+	HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
 	
 	/**
-	memset(buffer, 0, strlen(buffer));
-	sprintf(buffer, "mean 1: %d mean 2: %d\n", (uint8_t) means[0], (uint8_t) means[1]);
-	HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
 	
 	memset(removedMean1, 0, 400);
 	memset(removedMean2, 0, 400);
