@@ -288,6 +288,11 @@ int main(void)
 	readMixWaves(read_address5, read_address6);
 	//BSP_QSPI_EnableMemoryMappedMode();
 	cov();
+	eigValues();
+	eigVectors();
+	memset(buffer, 0 ,strlen(buffer));
+	sprintf(buffer, "x1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", sols1[0], sols2[0], sols1[1], sols2[1]);
+  HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
   /* USER CODE BEGIN RTOS_THREADS */
 	//osThreadDef(soundTask, soundThread, osPriorityNormal, 0, 128);
 	//soundThreadTaskHandle = osThreadCreate(osThread(soundTask), NULL);
@@ -1036,7 +1041,7 @@ void eigValues(){
 	eigDiagMatrixData[3] = eig[1];
 	
 	memset(buffer, 0 ,strlen(buffer));
-	sprintf(buffer, "eig1: %.2f eig2: %.2f\n", eig[0], eig[1]);
+	sprintf(buffer, "eig1: %.4f eig2: %.4f\n", eig[0], eig[1]);
 	HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000); 
 }
 
@@ -1050,37 +1055,20 @@ void eigVectors(){
 	eigVecMatrixData[1] = sols2[0];		//x2
 	eigVecMatrixData[2] = sols1[1];		//y1
 	eigVecMatrixData[3] = sols2[1];		//y2
-	
-	//memset(buffer, 0 ,strlen(buffer));
-	//sprintf(buffer, "x1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", sols1[0], sols2[0], sols1[1], sols2[1]);
-	//HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000); 
+	 
 }
 
 float32_t * simultSolve(float32_t a, float32_t b, float32_t p, float32_t q, float32_t * sols){
 
 	float64_t x, y;
-	
 	float64_t c = 0;
 	float64_t r = 0;
 	
-	//if(((a*q-p*b)!=0)&&((b*p-q*a)!=0))
-	{//In this case we have a unique solution and display x and y
-		//x=(c*q-r*b)/(a*q-p*b);
-		//y=(c*p-r*a)/(b*p-q*a);
-	}
-	//else if(((a*q-p*b)==0)&&((b*p-q*a)==0)&&((c*q-r*b)==0)&&((c*p-r*a)==0)){//In such condition we can have infinitely many solutions to the equation.
-	//else {//When we have such a condition than mathematically we can choose any one unknown as free and other unknown can be calculated using the free variables's value.
-	//So we choose x as free variable and then get y
-	    x = 1;
-	    y = (c/b) + ((-1*a/b)*x); 
-	//}
+	x = 1;
+	y = (c/b) + ((-1*a/b)*x); 
 
 	sols[0] = x;
 	sols[1] = y;
-	
-	memset(buffer, 0 ,strlen(buffer));
-	sprintf(buffer, "x1: %.4f y1: %.4f\n", x, y);
-	HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000); 
 	
 	return sols;
 }
