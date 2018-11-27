@@ -287,7 +287,7 @@ int main(void)
 	//HAL_Delay(10000);
 	readMixWaves(read_address5, read_address6);
 	//BSP_QSPI_EnableMemoryMappedMode();
-
+	cov();
   /* USER CODE BEGIN RTOS_THREADS */
 	//osThreadDef(soundTask, soundThread, osPriorityNormal, 0, 128);
 	//soundThreadTaskHandle = osThreadCreate(osThread(soundTask), NULL);
@@ -983,28 +983,23 @@ void findMean(void){
 
 **/
 void cov(){
-	float32_t removedMean1[100]; //x1 - mean
-	float32_t removedMean2[100]; //x1 - mean
-	int temp1 = read_address3;
-	int temp2 = read_address4;
-	float32_t sum1 = 0;
-	float32_t sum2 = 0;
+	float32_t buffer1[100]; //x1 - mean
+	float32_t buffer2[100]; //x1 - mean
+	int temp1 = read_address5;
+	int temp2 = read_address6;
 	
-	
-	for(int j=0; j<16; j++) {
-		memset(removedMean1, 0, 400);
-		memset(removedMean2, 0, 400);
-		BSP_QSPI_Read((uint8_t *)removedMean1, temp1, 400);
-		BSP_QSPI_Read((uint8_t *)removedMean2, temp2, 400);
+	for(int i=0; i<16; i++) {
+		memset(buffer1, 0, 400);
+		memset(buffer2, 0, 400);
+		BSP_QSPI_Read((uint8_t *)buffer1, temp1, 400);
+		BSP_QSPI_Read((uint8_t *)buffer2, temp2, 400);
 		temp1+=400;
 		temp2+=400;
-		for(int i=0; i<100; i++) {
-			var1 += (removedMean1[i] * removedMean1[i]);
-			cov1 += (removedMean1[i] * removedMean2[i]);
-			cov2 = cov1;
-			var2 += (removedMean2[i] * removedMean2[i]);
-			//sum1+=removedMean1[i];
-			//sum2+=removedMean2[i];
+		for(int j=0; j<100; j++) {
+			var1 += (buffer1[j] * buffer1[j]);
+			cov1 += (buffer1[j] * buffer2[j]);
+			cov2 += (buffer2[j] * buffer1[j]);
+			var2 += (buffer2[j] * buffer2[j]);
 		}
 		HAL_Delay(2000);
 	}
