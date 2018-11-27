@@ -281,7 +281,7 @@ int main(void)
 	mixWaves(read_address1, read_address2);
 	//readMixWaves(read_address3, read_address4);
 	findMean();
-	//readMixWaves(read_address3, read_address4);
+	readMixWaves(read_address3, read_address4);
 	//HAL_Delay(10000);
 	remMean();
 	//HAL_Delay(10000);
@@ -675,6 +675,8 @@ void readMixWaves(int readAddress1, int readAddress2) {
 	
 	int temp1 = readAddress1;
 	int temp2 = readAddress2;
+	float32_t sum1 = 0;
+	float32_t sum2 = 0;
 	
 	for(int i=0; i<16; i++) {
 		memset(buffer1, 0, 400);
@@ -685,11 +687,17 @@ void readMixWaves(int readAddress1, int readAddress2) {
 		temp2+=400;
 		
 		for(int j=0; j<100; j++) {
-			memset(buffer, 0, strlen(buffer));
-			sprintf(buffer, "value 1: %.2f value 2: %.2f\n", buffer1[j], buffer2[j]);
-			HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+			//memset(buffer, 0, strlen(buffer));
+			//sprintf(buffer, "value 1: %.2f value 2: %.2f\n", buffer1[j], buffer2[j]);
+			//HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+			sum1 += buffer1[j];
+			sum2 += buffer2[j];
 		}
 	}
+	
+	memset(buffer, 0, strlen(buffer));
+	sprintf(buffer, "sum 1: %.2f sum 2: %.2f\n", sum1, sum2);
+	HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
 }
 
 int unmixedWaves(uint32_t readAddress1, uint32_t readAddress2){	
