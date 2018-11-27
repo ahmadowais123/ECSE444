@@ -759,13 +759,13 @@ void remMean(void){
 	int sum1 = 0;
 	int sum2 = 0;
 	
-	for(int i = 0; i < NUMBER_OF_SAMPLES; i++){
+	for(int i = 0; i < 1000; i++){
 		sum1 += x1[i];
 		sum2 += x2[i];
 	}
 	
-	means[0] = sum1/NUMBER_OF_SAMPLES;
-	means[1] = sum2/NUMBER_OF_SAMPLES;
+	means[0] = sum1/1000;
+	means[1] = sum2/1000;
 	
 	int index = 0;
 	
