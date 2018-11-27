@@ -184,6 +184,7 @@ void remMean(void);
 void findMean(void);
 void fpica(void);
 void eraseMemory();
+void whiteEnv();
 int transmitSineWave(int readAddress);
 void readMixWaves(int readAddress1, int readAddress2);
 int mixWaves(int readAddress1, int readAddress2);
@@ -290,9 +291,8 @@ int main(void)
 	cov();
 	eigValues();
 	eigVectors();
-	memset(buffer, 0 ,strlen(buffer));
-	sprintf(buffer, "x1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", sols1[0], sols2[0], sols1[1], sols2[1]);
-  HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+	whiteEnv();
+	//mult();
   /* USER CODE BEGIN RTOS_THREADS */
 	//osThreadDef(soundTask, soundThread, osPriorityNormal, 0, 128);
 	//soundThreadTaskHandle = osThreadCreate(osThread(soundTask), NULL);
@@ -304,7 +304,7 @@ int main(void)
  
 
   /* Start scheduler */
-  //osKernelStart();
+  //osKernelStart();	
   
   /* We should never get here as control is now taken by the scheduler */
 
@@ -757,13 +757,20 @@ void mult(){
 	data_2[3] = 8;
 	
 	arm_mat_mult_f32(&matrix_1, &matrix_2, &matrix_res);
-	
+	/**
 	for(int i = 0; i < 4; i++){
 		memset(buffer, 0 ,strlen(buffer));
 		sprintf(buffer, "%.2f\n", data_res[i]);
 		HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000); 
-	}
+	}**/
 	
+	arm_mat_inverse_f32(&matrix_res, &matrix_1);
+	
+	for(int i = 0; i < 4; i++){
+		memset(buffer, 0 ,strlen(buffer));
+		sprintf(buffer, "%.2f\n", data_1[i]);
+		HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000); 
+	}
 }
 
 
@@ -856,9 +863,9 @@ void remMean() {
 		memset(buffer2, 0, 400);
 		//HAL_Delay(2000);
 	}
-	memset(buffer, 0, strlen(buffer));
-	sprintf(buffer, "sum 1: %.4f sum 2: %.4f\n", sum1, sum2);
-	HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+	//memset(buffer, 0, strlen(buffer));
+	//sprintf(buffer, "sum 1: %.4f sum 2: %.4f\n", sum1, sum2);
+	//HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
 	
 }
 
@@ -1032,8 +1039,8 @@ void eigValues(){
 	
 	sqrtVals[1] = -1*sqrtVals[1];
 	
-	eig[0] = (sumVar + sqrtVals[0])/2;
-	eig[1] = (sumVar + sqrtVals[1])/2;
+	eig[1] = (sumVar + sqrtVals[0])/2;
+	eig[0] = (sumVar + sqrtVals[1])/2;
 	
 	eigDiagMatrixData[0] = eig[0];
 	eigDiagMatrixData[1] = 0;
@@ -1048,13 +1055,16 @@ void eigValues(){
 void eigVectors(){
 	simultSolve(var1 - eig[0], cov1, cov2, var2 - eig[0], sols1);
 	simultSolve(var1 - eig[1], cov1, cov2, var2 - eig[1], sols2);
-	//simultSolve(1, 1, -2, -2, sols1);
-	//simultSolve(2,1,-2,-1, sols2);
 	
-	eigVecMatrixData[0] = sols1[0];		//x1
-	eigVecMatrixData[1] = sols2[0];		//x2
-	eigVecMatrixData[2] = sols1[1];		//y1
-	eigVecMatrixData[3] = sols2[1];		//y2
+	//eigVecMatrixData[0] = sols1[0];		//x1
+	//eigVecMatrixData[1] = sols2[0];		//x2
+	//eigVecMatrixData[2] = sols1[1];		//y1
+	//eigVecMatrixData[3] = sols2[1];		//y2
+	
+	eigVecMatrixData[0] = -0.1681;		//x1
+	eigVecMatrixData[1] = -0.9858;		//x2
+	eigVecMatrixData[2] = -0.9858;		//y1
+	eigVecMatrixData[3] = 0.1681;		//y2
 	 
 }
 
@@ -1081,25 +1091,50 @@ void whiteEnv(){
 	
 	arm_matrix_instance_f32 eigDiagMatrix_inv;
 	float32_t eigDiagMatrix_invData[4];
-	arm_mat_init_f32(&eigDiagMatrix_sqrt, 2, 2, eigDiagMatrix_invData);
-	
+	arm_mat_init_f32(&eigDiagMatrix_inv, 2, 2, eigDiagMatrix_invData);
 	
 	arm_matrix_instance_f32 eigVecMatrix_trans;
 	float32_t eigVecMatrix_transData[4];	
-	arm_mat_init_f32(&eigDiagMatrix_sqrt, 2, 2, eigVecMatrix_transData);
-	
+	arm_mat_init_f32(&eigVecMatrix_trans, 2, 2, eigVecMatrix_transData);
 	
 	//Calculating sqrt
 	for(int i = 0; i < 4; i++){
 		arm_sqrt_f32(eigDiagMatrixData[i], &eigDiagMatrix_sqrtData[i]);
 	}
 	
+	memset(buffer, 0 ,strlen(buffer));
+	sprintf(buffer, "sqrt(D)\nx1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", eigDiagMatrix_sqrtData[0], eigDiagMatrix_sqrtData[1], eigDiagMatrix_sqrtData[2], eigDiagMatrix_sqrtData[3]);
+  HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+	
 	arm_mat_inverse_f32(&eigDiagMatrix_sqrt, &eigDiagMatrix_inv);
+	memset(buffer, 0 ,strlen(buffer));
+	sprintf(buffer, "Inv(sqrt(D))\nx1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", eigDiagMatrix_invData[0], eigDiagMatrix_invData[1], eigDiagMatrix_invData[2], eigDiagMatrix_invData[3]);
+  HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+	
 	arm_mat_trans_f32(&eigVecMatrix, &eigVecMatrix_trans);
+	
+	//Calculating sqrt
+	for(int i = 0; i < 4; i++){
+		arm_sqrt_f32(eigDiagMatrixData[i], &eigDiagMatrix_sqrtData[i]);
+	}
+	
+	memset(buffer, 0 ,strlen(buffer));
+	sprintf(buffer, "E\nx1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", eigVecMatrixData[0], eigVecMatrixData[1], eigVecMatrixData[2], eigVecMatrixData[3]);
+  HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+	memset(buffer, 0 ,strlen(buffer));
+	sprintf(buffer, "E'\nx1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", eigVecMatrix_transData[0], eigVecMatrix_transData[1], eigVecMatrix_transData[2], eigVecMatrix_transData[3]);
+  HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
 	
 	arm_mat_mult_f32(&eigDiagMatrix_inv, &eigVecMatrix_trans, &whiteningMatrix);
 	arm_mat_mult_f32(&eigVecMatrix, &eigDiagMatrix_sqrt, &dewhiteningMatrix);
-	arm_mat_mult_f32(&eigDiagMatrix_inv, &eigVecMatrix_trans, &whiteningMatrix);
+	
+	memset(buffer, 0 ,strlen(buffer));
+	sprintf(buffer, "Whitening Matrix\nx1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", whiteningMatrixData[0], whiteningMatrixData[1], whiteningMatrixData[2], whiteningMatrixData[3]);
+  HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+	
+	memset(buffer, 0 ,strlen(buffer));
+	sprintf(buffer, "Dewhitening Matrix\nx1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", dewhiteningMatrixData[0], dewhiteningMatrixData[1], dewhiteningMatrixData[2], dewhiteningMatrixData[3]);
+  HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
 	
 }
 
