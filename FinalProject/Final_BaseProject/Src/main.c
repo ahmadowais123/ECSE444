@@ -232,6 +232,7 @@ int unmixedWaves(uint32_t readAddress1, uint32_t readAddress2);
 float32_t RandomNumber(float Max);
 float32_t normalize(float32_t vector[], int length);
 float32_t * simultSolve(float32_t a, float32_t b, float32_t p, float32_t q, float32_t * sols);
+void fastica(void);
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
 
@@ -324,10 +325,18 @@ int main(void)
 	
 	//BSP_QSPI_Erase_Chip();
 	//eraseMemory();
-	//HAL_Delay(5000);
+	//HAL_Delay(10000);
+	
 	
 	sineWave(freq1, write_address1);
 	sineWave(freq2, write_address2);
+	osThreadDef(soundTask, soundThread, osPriorityNormal, 0, 640);
+	soundThreadTaskHandle = osThreadCreate(osThread(soundTask), NULL);
+	osKernelStart();
+	
+	
+	
+	/*
 	//readMixWaves(read_address1, read_address2);
 	mixWaves(read_address1, read_address2);
 	//readMixWaves(read_address3, read_address4);
@@ -351,7 +360,7 @@ int main(void)
 	//HAL_Delay(150);
 	addMean();
 	readMixWaves(read_address10, read_address11);
-	
+	*/
 	
 	
 	//memset(buffer, 0 ,strlen(buffer));
@@ -382,8 +391,7 @@ int main(void)
 	
 	//mult();
   /* USER CODE BEGIN RTOS_THREADS */
-	//osThreadDef(soundTask, soundThread, osPriorityNormal, 0, 128);
-	//soundThreadTaskHandle = osThreadCreate(osThread(soundTask), NULL);
+	
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
@@ -392,7 +400,6 @@ int main(void)
  
 
   /* Start scheduler */
-  //osKernelStart();	
   
   /* We should never get here as control is now taken by the scheduler */
 
@@ -658,7 +665,7 @@ void soundThread(void const * argument) {
 		osThreadDef(blinkTask, blinkThread, osPriorityNormal, 0, 128);
 		blinkThreadTaskHandle = osThreadCreate(osThread(blinkTask), NULL);
 		while(1) {
-			/**
+		/*	
 			if(interrupt_flag == 1 && chooseThread != 0) {
 				interrupt_flag = 0;
 				if(index == 32000) index = 0;
@@ -666,37 +673,31 @@ void soundThread(void const * argument) {
 				HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_8B_R, x1[index]);
 				HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_8B_R, x2[index]);
 				index++;
-			}
-			**/
+			}*/
+			
 			if(!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)){
 				buttonPressed = 1;
 				while(!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)){}
 				buttonPressed = 0;
 				chooseThread = chooseThread + 1;
-				/**
+				
 				if(chooseThread == 1) {
 					unmixedWaves(read_address1, read_address2);
+					readMixWaves(read_address1, read_address2);
 				} else if(chooseThread == 2){
-					remMean();
-				} else if(chooseThread == 3) {
 					mixWaves(read_address1, read_address2);
+					readMixWaves(read_address1, read_address2);
+				} else if(chooseThread == 3) {
+					fastica();
+					readMixWaves(read_address10, read_address11);
 				} else if(chooseThread == 4) {
 					osThreadTerminate(blinkThreadTaskHandle);
 					BSP_QSPI_Erase_Chip();
-					osThreadCreate(osThread(blinkTask), NULL);
-					while(1){};
-				}
-				**/
-				if(chooseThread == 1) {
-					remMean();
-					//sineWave(freq1, write_address1);
-					//transmitSineWave(read_address1);
-				} else if(chooseThread == 2) {
-					osThreadTerminate(blinkThreadTaskHandle);
 					eraseMemory();
 					osThreadCreate(osThread(blinkTask), NULL);
 					while(1){};
 				}
+				
 			}
 			
 			timer = 0;
@@ -908,6 +909,23 @@ void blinkThread(void const *arg){
 	}
 }
 
+void fastica(){
+	
+	findMean();
+	remMean();
+	cov();
+	eigValues();
+	eigVectors();
+	whiteEnv();
+	whiteSig();
+	fpica();
+	
+	newMeans[0] = (Wdata[0]*mean1)+(Wdata[1]*mean2);
+	newMeans[1] = (Wdata[2]*mean1)+(Wdata[3]*mean2);
+	
+	addMean();
+	
+}
 
 
 void remMean() {
