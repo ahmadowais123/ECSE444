@@ -1350,10 +1350,10 @@ void fpica() {
 				if(i==0) {
 					Bdata[0] = wData[0];
 					Bdata[2] = wData[1];
-					Adata[0] = -1*((dewhiteningMatrixData[0]*wData[0])+(dewhiteningMatrixData[1]*wData[1]));
-					Adata[2] = -1*((dewhiteningMatrixData[2]*wData[0])+(dewhiteningMatrixData[3]*wData[1]));
-					Wdata[0] = -1*((wData[0]*whiteningMatrixData[0])+(wData[1]*whiteningMatrixData[2]));
-					Wdata[1] = -1*((wData[0]*whiteningMatrixData[1])+(wData[1]*whiteningMatrixData[3]));
+					Adata[0] = ((dewhiteningMatrixData[0]*wData[0])+(dewhiteningMatrixData[1]*wData[1]));
+					Adata[2] = ((dewhiteningMatrixData[2]*wData[0])+(dewhiteningMatrixData[3]*wData[1]));
+					Wdata[0] = ((wData[0]*whiteningMatrixData[0])+(wData[1]*whiteningMatrixData[2]));
+					Wdata[1] = ((wData[0]*whiteningMatrixData[1])+(wData[1]*whiteningMatrixData[3]));
 					//memset(buffer, 0 ,strlen(buffer));
 					//sprintf(buffer, "Dewhitening Matrix\nx1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", Adata[0], Adata[1], Adata[2], Adata[3]);
 					//HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
@@ -1520,12 +1520,6 @@ void addMean(){
 		temp2+=400;
 		//HAL_UART_Transmit(&huart1, (uint8_t *)"Running\n", 8, 30000);
 		for(int j=0; j<100; j++) {
-			float32_t mult_11 = a11*buffer1[j];
-			float32_t mult_12 = a12*buffer2[j];
-			float32_t mult_21 = a21*buffer1[j];
-			float32_t mult_22 = a22*buffer2[j];
-			float32_t X1 = mult_11 + mult_12;
-			float32_t X2 = mult_21 + mult_22;	
 			float32_t x1 = ((Wdata[0] * buffer1[j])+(Wdata[1]*buffer2[j])) + newMeans[0];
 			float32_t x2 = ((Wdata[2] * buffer1[j])+(Wdata[3]*buffer2[j])) + newMeans[1];
 			
