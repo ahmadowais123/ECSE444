@@ -107,6 +107,10 @@ uint32_t write_address8 = ((uint32_t)0xAAE60);
 uint32_t read_address8 = ((uint32_t)0xAAE60);
 uint32_t write_address9 = ((uint32_t)0xC3500);
 uint32_t read_address9 = ((uint32_t)0xC3500);
+uint32_t write_address10 = ((uint32_t)0xDBBA0);
+uint32_t read_address10 = ((uint32_t)0xDBBA0);
+uint32_t write_address11 = ((uint32_t)0xF4240);
+uint32_t read_address11 = ((uint32_t)0xF4240);
 
 	
 //mixed waves	
@@ -322,7 +326,6 @@ int main(void)
 	//eraseMemory();
 	//HAL_Delay(5000);
 	
-	
 	sineWave(freq1, write_address1);
 	sineWave(freq2, write_address2);
 	//readMixWaves(read_address1, read_address2);
@@ -342,11 +345,12 @@ int main(void)
 	newMeans[0] = (Wdata[0]*mean1)+(Wdata[1]*mean2);
 	newMeans[1] = (Wdata[2]*mean1)+(Wdata[3]*mean2);
 	
-	memset(buffer, 0 ,strlen(buffer));
-	sprintf(buffer, "New Means\nmean1: %.4f mean2: %.4f\n", newMeans[0], newMeans[1]);
-  HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
-	HAL_Delay(150);
-	//addMean();
+	//memset(buffer, 0 ,strlen(buffer));
+	//sprintf(buffer, "New Means\nmean1: %.4f mean2: %.4f\n", newMeans[0], newMeans[1]);
+  //HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+	//HAL_Delay(150);
+	addMean();
+	readMixWaves(read_address10, read_address11);
 	
 	
 	
@@ -1116,6 +1120,7 @@ void whiteEnv(){
 	arm_mat_mult_f32(&eigDiagMatrix_inv, &eigVecMatrix_trans, &whiteningMatrix);
 	arm_mat_mult_f32(&eigVecMatrix, &eigDiagMatrix_sqrt, &dewhiteningMatrix);
 	
+	/**
 	memset(buffer, 0 ,strlen(buffer));
 	sprintf(buffer, "Whitening Matrix\nx1: %.4f x2: %.4f\ny1: %.4f y2: %.4f\n", whiteningMatrixData[0], whiteningMatrixData[1], whiteningMatrixData[2], whiteningMatrixData[3]);
   HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
@@ -1124,7 +1129,7 @@ void whiteEnv(){
 	memset(buffer, 0 ,strlen(buffer));
 	sprintf(buffer, "Dewhitening Matrix\nx1: %.4f x2: %.4f\ny1: %.4f y2: %.4f\n", dewhiteningMatrixData[0], dewhiteningMatrixData[1], dewhiteningMatrixData[2], dewhiteningMatrixData[3]);
   HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
-	HAL_Delay(100);
+	HAL_Delay(100);**/
 	
 }
 
@@ -1400,6 +1405,7 @@ void fpica() {
 			//return;
 		}
 	}
+	/**
 	memset(buffer, 0 ,strlen(buffer));
 	sprintf(buffer, "A\nx1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", Adata[0], Adata[1], Adata[2], Adata[3]);
   HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
@@ -1408,7 +1414,7 @@ void fpica() {
 	memset(buffer, 0 ,strlen(buffer));
 	sprintf(buffer, "W\nx1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", Wdata[0], Wdata[1], Wdata[2], Wdata[3]);
   HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
-	HAL_Delay(150);
+	HAL_Delay(150);**/
 }
 
 void addMean(){
@@ -1416,8 +1422,8 @@ void addMean(){
 	float32_t buffer2[100];
 	int temp1 = read_address5;
 	int temp2 = read_address6;
-	int temp3 = write_address7;
-	int temp4 = write_address8;
+	int temp3 = write_address10;
+	int temp4 = write_address11;
 	
 	for(int i=0; i<16; i++) {
 		memset(buffer1, 0, 400);
