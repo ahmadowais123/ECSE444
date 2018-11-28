@@ -112,6 +112,8 @@ uint32_t read_address10 = ((uint32_t)0xDBBA0);
 uint32_t write_address11 = ((uint32_t)0xF4240);
 uint32_t read_address11 = ((uint32_t)0xF4240);
 
+
+int numSamples[6] = {123, 83, };		//samples for 2 periods
 	
 //mixed waves	
 //uint8_t x1[NUMBER_OF_SAMPLES];
@@ -326,7 +328,6 @@ int main(void)
 	//BSP_QSPI_Erase_Chip();
 	//eraseMemory();
 	//HAL_Delay(10000);
-	
 	
 	sineWave(freq1, write_address1);
 	sineWave(freq2, write_address2);
@@ -686,7 +687,7 @@ void soundThread(void const * argument) {
 					readMixWaves(read_address1, read_address2);
 				} else if(chooseThread == 2){
 					mixWaves(read_address1, read_address2);
-					readMixWaves(read_address1, read_address2);
+					readMixWaves(read_address3, read_address4);
 				} else if(chooseThread == 3) {
 					fastica();
 					readMixWaves(read_address10, read_address11);
