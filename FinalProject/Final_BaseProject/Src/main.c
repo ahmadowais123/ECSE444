@@ -85,8 +85,8 @@ int chooseThread = 0;
 float32_t freq1 = 261.63;
 float32_t freq2 = 392.00;
 float32_t Ts = 16000;
-float32_t epsilon = 0.0001;
-int MAX_NUMBER_OF_ITERATIONS = 1000;
+float32_t epsilon = 0.01;
+int MAX_NUMBER_OF_ITERATIONS = 5;
 
 //QSPI Addresses
 uint32_t write_address1 = ((uint32_t)0x0);
@@ -153,10 +153,44 @@ float32_t newVectorMatrixData[4];
 //A Matrix
 arm_matrix_instance_f32 A;
 float32_t Adata[4];
-	
+
 //W Matrix
 arm_matrix_instance_f32 W;
 float32_t Wdata[4];
+
+//B Matrix
+arm_matrix_instance_f32 B;
+float32_t Bdata[4] = {0.0, 0.0, 0.0, 0.0};
+
+//B' Matrix
+arm_matrix_instance_f32 Btranspose;
+float32_t BtransposeData[4];
+
+//w Matrix
+arm_matrix_instance_f32 w;
+float32_t wData[2];
+
+//w old
+arm_matrix_instance_f32 wOld;
+float32_t wOldData[2] = {0.0, 0.0};
+
+//B*B'
+arm_matrix_instance_f32 BtimesBtranspose;
+float32_t BtimesBtransposeData[4];
+
+//B*B'*w
+arm_matrix_instance_f32 BtimesBtransposetimesw;
+float32_t BtimesBtransposetimeswData[2];
+
+//w-wOld
+arm_matrix_instance_f32 wminuswOld;
+float32_t wminuswOldData[2];
+
+//w+wOld
+arm_matrix_instance_f32 wpluswOld;
+float32_t wpluswOldData[2];
+
+float32_t newMeans[2];
 
 
 uint8_t bufferValues[100];
@@ -186,6 +220,7 @@ void fpica(void);
 void eraseMemory();
 void whiteEnv();
 void whiteSig();
+void addMean();
 int transmitSineWave(int readAddress);
 void readMixWaves(int readAddress1, int readAddress2);
 int mixWaves(int readAddress1, int readAddress2);
@@ -258,6 +293,14 @@ int main(void)
 	arm_mat_init_f32(&newVectorMatrix, 2, 32000, newVectorMatrixData);
 	arm_mat_init_f32(&A, 2, 2, Adata);
 	arm_mat_init_f32(&W, 2, 2, Wdata);
+	arm_mat_init_f32(&B, 2, 2, Bdata);
+	arm_mat_init_f32(&Btranspose, 2, 2, BtransposeData);
+	arm_mat_init_f32(&w, 2, 1, wData);
+	arm_mat_init_f32(&BtimesBtranspose, 2, 2, BtimesBtransposeData);
+	arm_mat_init_f32(&wOld, 2, 1, wOldData);
+	arm_mat_init_f32(&BtimesBtransposetimesw, 2, 1, BtimesBtransposetimeswData);
+	arm_mat_init_f32(&wminuswOld, 2, 1, wminuswOldData);
+	arm_mat_init_f32(&wpluswOld, 2, 1, wpluswOldData);
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
@@ -272,31 +315,58 @@ int main(void)
   /* USER CODE END RTOS_TIMERS */
 
   /* Create the thread(s) */
-	sineWave(freq1, write_address1);
+	
 	//transmitSineWave(read_address1);
+	
 	//BSP_QSPI_Erase_Chip();
 	//eraseMemory();
+	//HAL_Delay(5000);
+	
+	sineWave(freq1, write_address1);
 	sineWave(freq2, write_address2);
-	//transmitSineWave(read_address2);
-					
-	//unmixedWaves(read_address1,read_address2);
 	mixWaves(read_address1, read_address2);
 	//readMixWaves(read_address3, read_address4);
 	findMean();
-	//readMixWaves(read_address3, read_address4);
-	//HAL_Delay(10000);
 	remMean();
-	//HAL_Delay(10000);
-	//readMixWaves(read_address5, read_address6);
-	//readMixWaves(read_address3, read_address4);
-	//BSP_QSPI_EnableMemoryMappedMode();
 	cov();
 	eigValues();
 	eigVectors();
 	whiteEnv();
 	whiteSig();
-	readMixWaves(read_address7, read_address8);
 	fpica();
+	newMeans[0] = (Wdata[0]*mean1)+(Wdata[1]*mean2);
+	newMeans[1] = (Wdata[2]*mean1)+(Wdata[3]*mean2);
+	addMean();
+	readMixWaves(read_address7, read_address8);
+	
+	
+	
+	//memset(buffer, 0 ,strlen(buffer));
+	//sprintf(buffer, "A\nx1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", Adata[0], Adata[1], Adata[2], Adata[3]);
+  //HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+	
+	//memset(buffer, 0 ,strlen(buffer));
+	//sprintf(buffer, "W\nx1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", Wdata[0], Wdata[1], Wdata[2], Wdata[3]);
+  //HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+	//addMean();
+	//readMixWaves(read_address5, read_address6);
+	
+	//BSP_QSPI_Erase_Chip();
+	//eraseMemory();
+	
+	//transmitSineWave(read_address2);
+					
+	//unmixedWaves(read_address1,read_address2);
+	
+	//readMixWaves(read_address3, read_address4);
+
+	//readMixWaves(read_address3, read_address4);
+	//HAL_Delay(10000);
+	//HAL_Delay(10000);
+	//readMixWaves(read_address5, read_address6);
+	//readMixWaves(read_address3, read_address4);
+	//BSP_QSPI_EnableMemoryMappedMode();
+	
 	//mult();
   /* USER CODE BEGIN RTOS_THREADS */
 	//osThreadDef(soundTask, soundThread, osPriorityNormal, 0, 128);
@@ -1208,89 +1278,88 @@ void storeSignals(uint32_t write_address, uint8_t * signal){
 void fpica() {
 	int numRows = 2;
 	int numCols = 1600;
-
-	//A Matrix
-	arm_matrix_instance_f32 A;
-	float32_t Adata[4];
-	arm_mat_init_f32(&A, numRows, numRows, Adata);
-	
-	//W Matrix
-	arm_matrix_instance_f32 W;
-	float32_t Wdata[4];
-	arm_mat_init_f32(&W, numRows, numRows, Wdata);
-	
-	//B Matrix
-	arm_matrix_instance_f32 B;
-	float32_t Bdata[4] = {0.0, 0.0, 0.0, 0.0};
-	arm_mat_init_f32(&B, numRows, numRows, Bdata);
-	
-	//B' Matrix
-	arm_matrix_instance_f32 Btranspose;
-	float32_t BtransposeData[4];
-	arm_mat_init_f32(&Btranspose, numRows, numRows, BtransposeData);
 	
 	//Do the transpose
 	arm_mat_trans_f32(&B, &Btranspose);
-	
+	/**
+	memset(buffer, 0 ,strlen(buffer));
+	sprintf(buffer, "B\nx1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", Bdata[0], Bdata[1], Bdata[2], Bdata[3]);
+  HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+	memset(buffer, 0 ,strlen(buffer));
+	sprintf(buffer, "B'\nx1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", BtransposeData[0], BtransposeData[1], BtransposeData[2], BtransposeData[3]);
+  HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);**/
 	
 	for(int i=0; i<numRows; i++) {
-		//w Matrix
-		arm_matrix_instance_f32 w;
-		float32_t wData[2] = {RandomNumber(4), RandomNumber(4)};
-		arm_mat_init_f32(&w, 2, 1, wData);
 		
-		//w old
-		arm_matrix_instance_f32 wOld;
-		float32_t wOldData[2] = {0.0, 0.0};
-		arm_mat_init_f32(&w, 2, 1, wOldData);
-		
-		//B*B'
-		arm_matrix_instance_f32 BtimesBtranspose;
-		float32_t BtimesBtransposeData[4];
-		arm_mat_init_f32(&w, 2, 2, BtimesBtransposeData);
-		
-		//B*B'*w
-		arm_matrix_instance_f32 BtimesBtransposetimesw;
-		float32_t BtimesBtransposetimeswData[2];
-		arm_mat_init_f32(&w, 2, 1, BtimesBtransposetimeswData);
+		if(i == 0) {
+			wData[0] = -1.3807;
+			wData[1] = -0.7284;
+		} else {
+			wData[0] = 1.8860;
+			wData[1] = -2.9414;
+		}
 		
 		//Do the multiplication
 		arm_mat_mult_f32(&B, &Btranspose, &BtimesBtranspose);
 		arm_mat_mult_f32(&BtimesBtranspose, &w, &BtimesBtransposetimesw);
 		arm_mat_sub_f32(&w, &BtimesBtransposetimesw, &w);
 		
+		/**
+		memset(buffer, 0 ,strlen(buffer));
+		sprintf(buffer, "BtimesBtranspose'\nx1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", BtimesBtransposeData[0], BtimesBtransposeData[1], BtimesBtransposeData[2], BtimesBtransposeData[3]);
+		HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+		memset(buffer, 0 ,strlen(buffer));
+		sprintf(buffer, "BtimesBtransposetimesw\nx1: %.2f x2: %.2f\n", BtimesBtransposetimeswData[0], BtimesBtransposetimeswData[1]);
+		HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+		memset(buffer, 0 ,strlen(buffer));
+		sprintf(buffer, "w\nx1: %.2f x2: %.2f\n", wData[0], wData[1]);
+		HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+		**/
+		
 		//Normalize w
 		float32_t wNorm = normalize(wData, 2);
 		wNorm = 1 / wNorm;
 		arm_mat_scale_f32(&w, wNorm, &w);
+		
+		/**
+		memset(buffer, 0 ,strlen(buffer));
+		sprintf(buffer, "wNorm: %.2f\n", wNorm);
+		HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);**/
+		//memset(buffer, 0 ,strlen(buffer));
+		//sprintf(buffer, "w\nx1: %.2f x2: %.2f\n", wData[0], wData[1]);
+		//HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
 		
 		for(int j=0; j<MAX_NUMBER_OF_ITERATIONS; j++) {
 			arm_mat_mult_f32(&B, &Btranspose, &BtimesBtranspose);
 			arm_mat_mult_f32(&BtimesBtranspose, &w, &BtimesBtransposetimesw);
 			arm_mat_sub_f32(&w, &BtimesBtransposetimesw, &w);
 			
-			//w-wOld
-			arm_matrix_instance_f32 wminuswOld;
-			float32_t wminuswOldData[2];
-			arm_mat_init_f32(&wminuswOld, 2, 1, wminuswOldData);
 			arm_mat_sub_f32(&w, &wOld, &wminuswOld);
 			float32_t wminuswOldNorm = normalize(wminuswOldData, 2);
 			
-			//w+wOld
-			arm_matrix_instance_f32 wpluswOld;
-			float32_t wpluswOldData[2];
-			arm_mat_init_f32(&wpluswOld, 2, 1, wpluswOldData);
 			arm_mat_add_f32(&w, &wOld, &wpluswOld);
 			float32_t wpluswOldNorm = normalize(wpluswOldData, 2);
 			
+			/**
+			memset(buffer, 0 ,strlen(buffer));
+			sprintf(buffer, "w-wOldNorm W+WoldNorm\nx1: %.2f x2: %.2f\n", wminuswOldNorm, wpluswOldNorm);
+			HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);**/
+			
 			if(wminuswOldNorm < epsilon || wpluswOldNorm < epsilon) {
+				//HAL_UART_Transmit(&huart1, (uint8_t *)"Inside if\n", 10, 30000);
 				if(i==0) {
 					Bdata[0] = wData[0];
 					Bdata[2] = wData[1];
-					Adata[0] = (dewhiteningMatrixData[0]*wData[0])+(dewhiteningMatrixData[1]*wData[1]);
-					Adata[2] = (dewhiteningMatrixData[2]*wData[0])+(dewhiteningMatrixData[3]*wData[1]);
-					Wdata[0] = (wData[0]*whiteningMatrixData[0])+(wData[1]*whiteningMatrixData[2]);
-					Wdata[1] = (wData[0]*whiteningMatrixData[1])+(wData[1]*whiteningMatrixData[3]);
+					Adata[0] = -1*((dewhiteningMatrixData[0]*wData[0])+(dewhiteningMatrixData[1]*wData[1]));
+					Adata[2] = -1*((dewhiteningMatrixData[2]*wData[0])+(dewhiteningMatrixData[3]*wData[1]));
+					Wdata[0] = -1*((wData[0]*whiteningMatrixData[0])+(wData[1]*whiteningMatrixData[2]));
+					Wdata[1] = -1*((wData[0]*whiteningMatrixData[1])+(wData[1]*whiteningMatrixData[3]));
+					//memset(buffer, 0 ,strlen(buffer));
+					//sprintf(buffer, "Dewhitening Matrix\nx1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", Adata[0], Adata[1], Adata[2], Adata[3]);
+					//HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+					//memset(buffer, 0 ,strlen(buffer));
+					//sprintf(buffer, "Dewhitening Matrix\nx1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", Wdata[0], Wdata[1], Wdata[2], Wdata[3]);
+					//HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
 				} else if(i==1) {
 					Bdata[1] = wData[0];
 					Bdata[3] = wData[1];
@@ -1298,59 +1367,115 @@ void fpica() {
 					Adata[3] = (dewhiteningMatrixData[2]*wData[0])+(dewhiteningMatrixData[3]*wData[1]);
 					Wdata[2] = (wData[0]*whiteningMatrixData[0])+(wData[1]*whiteningMatrixData[2]);
 					Wdata[3] = (wData[0]*whiteningMatrixData[1])+(wData[1]*whiteningMatrixData[3]);
+					//memset(buffer, 0 ,strlen(buffer));
+					//sprintf(buffer, "Dewhitening Matrix\nx1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", Adata[0], Adata[1], Adata[2], Adata[3]);
+					//HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+					//memset(buffer, 0 ,strlen(buffer));
+					//sprintf(buffer, "Dewhitening Matrix\nx1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", Wdata[0], Wdata[1], Wdata[2], Wdata[3]);
+					//HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
 				}
 				break;
 			}
+			//HAL_UART_Transmit(&huart1, (uint8_t *)"Outside if\n", 11, 30000);
 			
-			wOld.pData = w.pData;
+			wOldData[0] = wData[0];
+			wOldData[1] = wData[1];
+			//memset(buffer, 0 ,strlen(buffer));
+			//sprintf(buffer, "wOld\nx1: %.2f x2: %.2f\n", wOldData[0], wOldData[1]);
+			//HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
 			
 			float32_t whiteSigBuf1[100];
 			float32_t whiteSigBuf2[100];
-			float32_t result[100];
 			
-			uint32_t temp5 = read_address7;
-			uint32_t temp6 = read_address8;
-			uint32_t temp7 = read_address9;
+			int temp7 = read_address7;
+			int temp8 = read_address8;
+			int temp9 = read_address9;
 			
 			for(int i=0; i<16; i++) {
 				memset(whiteSigBuf1, 0, 400);
 				memset(whiteSigBuf2, 0, 400);
-				memset(result, 0, 400);
-				BSP_QSPI_Read((uint8_t *)whiteSigBuf1, temp5, 400);
-				BSP_QSPI_Read((uint8_t *)whiteSigBuf2, temp6, 400);
-				temp5+=400;
-				temp6+=400;
+				BSP_QSPI_Read((uint8_t *)whiteSigBuf1, temp7, 400);
+				BSP_QSPI_Read((uint8_t *)whiteSigBuf2, temp8, 400);
+				temp7+=400;
+				temp8+=400;
 				
 				for(int j=0; j<100; j++) {
-					result[j] = (whiteSigBuf1[j]*wData[0])+(whiteSigBuf2[j]*wData[1]);
-					result[j] = result[j]*result[j]*result[j]; 
+					float32_t mult_11 = a11*whiteSigBuf1[j];
+					float32_t mult_12 = a12*whiteSigBuf1[j];
+					float32_t mult_21 = a21*whiteSigBuf1[j];
+					float32_t mult_22 = a22*whiteSigBuf1[j];
+					float32_t X1 = mult_11 + mult_12;
+					float32_t X2 = mult_21 + mult_22;
+					float32_t a = whiteningMatrixData[0]*whiteSigBuf1[j];
+					float32_t b = whiteningMatrixData[0]*whiteSigBuf1[j];
+			
+					whiteSigBuf1[j] = (whiteSigBuf1[j]*wData[0])+(whiteSigBuf2[j]*wData[1]);
+					whiteSigBuf1[j] = whiteSigBuf1[j]*whiteSigBuf1[j]*whiteSigBuf1[j];
+					//result[j] = (whiteSigBuf1[j]*wData[0])+(whiteSigBuf2[j]*wData[1]);
+					//result[j] = result[j]*result[j]*result[j]; 
 				}
 				
-				BSP_QSPI_Write((uint8_t *)result, temp7, 400);
-				temp7+=400;
+				BSP_QSPI_Write((uint8_t *)whiteSigBuf1, temp9, 400);
+				temp9+=400;
 			}
 			
-			temp5 = read_address7;
-			temp6 = read_address8;
-			temp7 = read_address9;
 			float32_t sums[2];
 			
+			temp7 = read_address7;
+			temp9 = read_address9;
 			for(int i=0; i<16; i++) {
 				memset(whiteSigBuf1, 0, 400);
 				memset(whiteSigBuf2, 0, 400);
-				memset(result, 0, 400);
-				BSP_QSPI_Read((uint8_t *)whiteSigBuf1, temp5, 400);
-				BSP_QSPI_Read((uint8_t *)whiteSigBuf2, temp6, 400);
-				BSP_QSPI_Read((uint8_t *)result, temp7, 400);
-				temp5+=400;
-				temp6+=400;
+				BSP_QSPI_Read((uint8_t *)whiteSigBuf1, temp7, 400);
+				BSP_QSPI_Read((uint8_t *)whiteSigBuf2, temp9, 400);
 				temp7+=400;
+				temp9+=400;
 				
 				for(int j=0; j<100; j++) {
-					sums[0] += whiteSigBuf1[j]*result[j];
-					sums[1] += whiteSigBuf2[j]*result[j];
+					float32_t mult_11 = a11*whiteSigBuf1[j];
+					float32_t mult_12 = a12*whiteSigBuf1[j];
+					float32_t mult_21 = a21*whiteSigBuf1[j];
+					float32_t mult_22 = a22*whiteSigBuf1[j];
+					float32_t X1 = mult_11 + mult_12;
+					float32_t X2 = mult_21 + mult_22;
+					float32_t a = whiteningMatrixData[0]*whiteSigBuf1[j];
+					float32_t b = whiteningMatrixData[0]*whiteSigBuf1[j];	
+					
+					sums[0] += whiteSigBuf1[j]*whiteSigBuf2[j];
 				}
 			}
+			
+			//memset(buffer, 0 ,strlen(buffer));
+			//sprintf(buffer, "Sum1\n%.2f\n", sums[0]);
+			//HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+			//HAL_UART_Transmit(&huart1, (uint8_t *)"Reached Here\n", 13, 30000);
+			temp8 = read_address8;
+			temp9 = read_address9;
+			for(int i=0; i<16; i++) {
+				memset(whiteSigBuf1, 0, 400);
+				memset(whiteSigBuf2, 0, 400);
+				BSP_QSPI_Read((uint8_t *)whiteSigBuf1, temp8, 400);
+				BSP_QSPI_Read((uint8_t *)whiteSigBuf2, temp9, 400);
+				temp8+=400;
+				temp9+=400;
+				
+				for(int j=0; j<100; j++) {
+					float32_t mult_11 = a11*whiteSigBuf1[j];
+					float32_t mult_12 = a12*whiteSigBuf1[j];
+					float32_t mult_21 = a21*whiteSigBuf1[j];
+					float32_t mult_22 = a22*whiteSigBuf1[j];
+					float32_t X1 = mult_11 + mult_12;
+					float32_t X2 = mult_21 + mult_22;
+					float32_t a = whiteningMatrixData[0]*whiteSigBuf1[j];
+					float32_t b = whiteningMatrixData[0]*whiteSigBuf1[j];					
+					
+					sums[1] += whiteSigBuf1[j]*whiteSigBuf2[j];
+				}
+			}
+			
+			//memset(buffer, 0 ,strlen(buffer));
+			//sprintf(buffer, "Sum2\n%.2f\n", sums[1]);
+			//HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
 			
 			sums[0] = sums[0]/1600;
 			sums[1] = sums[1]/1600;
@@ -1360,51 +1485,72 @@ void fpica() {
 			sums[0] = sums[0]/normSums;
 			sums[1] = sums[1]/normSums;
 			
-			w.pData[0] = sums[0];
-			w.pData[1] = sums[1];
+			wData[0] = sums[0];
+			wData[1] = sums[1];
+			//HAL_UART_Transmit(&huart1, (uint8_t *)"Looping\n", 8, 30000);
+			//memset(buffer, 0 ,strlen(buffer));
+			//sprintf(buffer, "w\nx1: %.2f x2: %.2f\n", wData[0], wData[1]);
+			//HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+			//return;
 		}
 	}
+	//memset(buffer, 0 ,strlen(buffer));
+	//sprintf(buffer, "A\nx1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", Adata[0], Adata[1], Adata[2], Adata[3]);
+  //HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
 	
-	memset(buffer, 0 ,strlen(buffer));
-	sprintf(buffer, "Dewhitening Matrix\nx1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", Adata[0], Adata[1], Adata[2], Adata[3]);
-  HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
-	
-	memset(buffer, 0 ,strlen(buffer));
-	sprintf(buffer, "Dewhitening Matrix\nx1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", Wdata[0], Wdata[1], Wdata[2], Wdata[3]);
-  HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
+	//memset(buffer, 0 ,strlen(buffer));
+	//sprintf(buffer, "W\nx1: %.2f x2: %.2f\ny1: %.2f y2: %.2f\n", Wdata[0], Wdata[1], Wdata[2], Wdata[3]);
+  //HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
 }
 
 void addMean(){
-	float32_t buff1[100];
-	float32_t buff2[100];
-	int index = 0;
-	int temp1 = write_address8;
-	int temp2 = write_address9;
-
-	float32_t newMeans[2];
-		
-	newMeans[0] = (Wdata[0] * means[0]) + (Wdata[1] * means[1]);
-	newMeans[1] = (Wdata[2] * means[0]) + (Wdata[3] * means[1]);
+	float32_t buffer1[100];
+	float32_t buffer2[100];
+	int temp1 = read_address5;
+	int temp2 = read_address6;
+	int temp3 = write_address7;
+	int temp4 = write_address8;
 	
-	for(int i = 0; i < 32000; i++){
-		buff1[index] = (Wdata[0] * x1[i]) + (Wdata[1] * x2[i]) + newMeans[0];
-		buff2[index++] = (Wdata[2] * x1[i]) + (Wdata[3] * x2[i]) + newMeans[1];
-		if(index == 100){
-			BSP_QSPI_Write((uint8_t *) buff1, temp1, 400);
-			BSP_QSPI_Write((uint8_t *) buff2, temp2, 400);
-			index = 0;
-			temp1 += 400;
-			temp2 += 400;
-			memset(buff1, 0 ,400);
-			memset(buff2, 0 ,400);
+	for(int i=0; i<16; i++) {
+		memset(buffer1, 0, 400);
+		memset(buffer2, 0, 400);
+		BSP_QSPI_Read((uint8_t *)buffer1, temp1, 400);
+		BSP_QSPI_Read((uint8_t *)buffer2, temp2, 400);
+		temp1+=400;
+		temp2+=400;
+		//HAL_UART_Transmit(&huart1, (uint8_t *)"Running\n", 8, 30000);
+		for(int j=0; j<100; j++) {
+			float32_t mult_11 = a11*buffer1[j];
+			float32_t mult_12 = a12*buffer2[j];
+			float32_t mult_21 = a21*buffer1[j];
+			float32_t mult_22 = a22*buffer2[j];
+			float32_t X1 = mult_11 + mult_12;
+			float32_t X2 = mult_21 + mult_22;	
+			float32_t x1 = ((Wdata[0] * buffer1[j])+(Wdata[1]*buffer2[j])) + newMeans[0];
+			float32_t x2 = ((Wdata[2] * buffer1[j])+(Wdata[3]*buffer2[j])) + newMeans[1];
+			
+			buffer1[j] = x1;
+			buffer2[j] = x2;
 		}
+		BSP_QSPI_Write((uint8_t *)buffer1, temp3, 400);
+		BSP_QSPI_Write((uint8_t *)buffer2, temp4, 400);
+		temp3+=400;
+		temp4+=400;
+		memset(buffer1, 0, 400);
+		memset(buffer2, 0, 400);
+		//HAL_Delay(2000);
 	}
+
+	//memset(buffer, 0 ,strlen(buffer));
+	//sprintf(buffer, "%d\n", x1[i]);
+
+	return;
 }
 
 float32_t normalize(float32_t vector[], int length) {
 	float32_t wNorm;
 	for(int i=0; i<length; i++) {
-			wNorm += vector[i]*vector[i];
+			wNorm += (vector[i]*vector[i]);
 	}
 	arm_sqrt_f32(wNorm, &wNorm);
 	return wNorm;
