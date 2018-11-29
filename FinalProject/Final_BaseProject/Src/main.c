@@ -112,8 +112,9 @@ uint32_t read_address10 = ((uint32_t)0xDBBA0);
 uint32_t write_address11 = ((uint32_t)0xF4240);
 uint32_t read_address11 = ((uint32_t)0xF4240);
 
-
-int numSamples[6] = {123, 83, };		//samples for 2 periods
+																							//2 periods
+int numSamples[6] = {1590, 1592, 1585, 1591, 1592 , 			1590			};
+float32_t maxValues[6] = {1, 1, 1.50, 0.36, 1.43, 1.54};
 	
 //mixed waves	
 //uint8_t x1[NUMBER_OF_SAMPLES];
@@ -235,6 +236,7 @@ float32_t RandomNumber(float Max);
 float32_t normalize(float32_t vector[], int length);
 float32_t * simultSolve(float32_t a, float32_t b, float32_t p, float32_t q, float32_t * sols);
 void fastica(void);
+void configDacOutput(int addr1, int addr2, float32_t maxValue1, float32_t maxValue2);
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
 
@@ -662,35 +664,49 @@ static void MX_GPIO_Init(void){
 /* USER CODE END 4 */
 
 void soundThread(void const * argument) {
-		int index = 0;
+		int index1 = 0;
+		int index2 = 0;
+		int addr1, addr2;
+		int chooseNumSamples = 0;
 		osThreadDef(blinkTask, blinkThread, osPriorityNormal, 0, 128);
 		blinkThreadTaskHandle = osThreadCreate(osThread(blinkTask), NULL);
 		while(1) {
-		/*	
 			if(interrupt_flag == 1 && chooseThread != 0) {
-				interrupt_flag = 0;
-				if(index == 32000) index = 0;
 				
-				HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_8B_R, x1[index]);
-				HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_8B_R, x2[index]);
-				index++;
-			}*/
+				interrupt_flag = 0;
+				if(index1 == numSamples[chooseNumSamples]) index1 = 0;
+				if(index2 == numSamples[chooseNumSamples+1]) index2 = 0;
+				
+				HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_8B_R, x1[index1]);
+				HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_8B_R, x2[index2]);
+				index1++;
+				index2++;
+			}
 			
 			if(!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)){
 				buttonPressed = 1;
 				while(!HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)){}
 				buttonPressed = 0;
 				chooseThread = chooseThread + 1;
-				
+					
 				if(chooseThread == 1) {
-					unmixedWaves(read_address1, read_address2);
-					readMixWaves(read_address1, read_address2);
+					addr1 = read_address1;
+					addr2 = read_address2;
+					unmixedWaves(addr1, addr2);
+					readMixWaves(addr1, addr2);
+					chooseNumSamples = 0;
 				} else if(chooseThread == 2){
+					addr1 = read_address3;
+					addr2 = read_address4;
 					mixWaves(read_address1, read_address2);
-					readMixWaves(read_address3, read_address4);
+					readMixWaves(addr1, addr2);
+					chooseNumSamples = 2;
 				} else if(chooseThread == 3) {
 					fastica();
-					readMixWaves(read_address10, read_address11);
+					addr1 = read_address10;
+					addr2 = read_address11;
+					readMixWaves(addr1, addr2);
+					chooseNumSamples = 4;
 				} else if(chooseThread == 4) {
 					osThreadTerminate(blinkThreadTaskHandle);
 					BSP_QSPI_Erase_Chip();
@@ -699,13 +715,54 @@ void soundThread(void const * argument) {
 					while(1){};
 				}
 				
+				configDacOutput(addr1, addr2, maxValues[chooseNumSamples], maxValues[chooseNumSamples + 1]);
+				
 			}
 			
 			timer = 0;
-			
-			
 		}
 }
+
+
+void configDacOutput(int addr1, int addr2, float32_t maxValue1, float32_t maxValue2){
+	int temp1 = addr1;
+	int temp2 = addr2;	
+	float32_t buff1[100];
+	float32_t buff2[100];
+	
+
+	int k = 0;
+	
+	for(int i = 0; i < 16; i++){
+		BSP_QSPI_Read((uint8_t *) buff1, temp1, 400);
+		BSP_QSPI_Read((uint8_t *) buff2, temp2, 400);
+		
+		temp1 += 400;
+		temp2 += 400;
+		
+		
+		for(int j = 0; j < 100; j++){
+			buff1[j] = buff1[j] + maxValue1;
+			x1[k] = (uint8_t) (((buff1[j])/(2.0*maxValue1)) * 254);
+			
+			buff2[j] = buff2[j] + maxValue2;
+			x2[k] = (uint8_t) (((buff2[j])/(2.0*maxValue2)) * 254);
+			
+			memset(buffer, 0, strlen(buffer));
+			sprintf(buffer, "v1: %d v2: %d\n", x1[k], x2[k]);
+			HAL_UART_Transmit(&huart1, (uint8_t *) buffer, strlen(buffer), 30000);
+			
+			k++;
+		}
+	}
+	
+			memset(buffer, 0, strlen(buffer));
+			sprintf(buffer, "max1: %f max2: %f\n", maxValue1, maxValue2);
+			HAL_UART_Transmit(&huart1, (uint8_t *) buffer, strlen(buffer), 30000);
+		
+	
+}
+
 
 void eraseMemory() {
 		int status = 0;
