@@ -235,7 +235,7 @@ void eraseMemory();
 
 //Helper Math Methods
 float32_t normalize(float32_t vector[], int length);
-float32_t *simultSolve(float32_t a, float32_t b, float32_t p, float32_t q, float32_t * sols);
+float32_t *simultSolve(float32_t a, float32_t b, float32_t p, float32_t q, float32_t xVal, float32_t * sols);
 
 /**
   * @brief  The application entry point.
@@ -642,7 +642,6 @@ void mixWaves(int readAddress1, int readAddress2){
 void unmixedWaves(uint32_t readAddress1, uint32_t readAddress2){	
 	BSP_QSPI_Read(x1, readAddress1, 32000);
 	BSP_QSPI_Read(x2, readAddress2, 32000);
-	
 	return;
 }
 
@@ -652,8 +651,6 @@ void readMixWaves(int readAddress1, int readAddress2) {
 	
 	int temp1 = readAddress1;
 	int temp2 = readAddress2;
-	float32_t sum1 = 0;
-	float32_t sum2 = 0;
 	
 	for(int i=0; i<16; i++) {
 		memset(buffer1, 0, 400);
@@ -667,9 +664,7 @@ void readMixWaves(int readAddress1, int readAddress2) {
 			memset(buffer, 0, strlen(buffer));
 			sprintf(buffer, "value 1: %.2f value 2: %.2f\n", buffer1[j], buffer2[j]);
 			HAL_UART_Transmit(&huart1, (uint8_t *)&buffer[0], strlen(buffer), 30000);
-			sum1 += buffer1[j];
-			sum2 += buffer2[j];
-			HAL_Delay(150);
+			//HAL_Delay(100);
 		}
 	}
 }
@@ -709,8 +704,6 @@ void remMean() {
 	int temp2 = read_address4;
 	int temp3 = write_address5;
 	int temp4 = write_address6;
-	float32_t sum1 = 0;
-	float32_t sum2 = 0;
 	
 	for(int i=0; i<16; i++) {
 		memset(buffer1, 0, 400);
@@ -720,20 +713,8 @@ void remMean() {
 		temp1+=400;
 		temp2+=400;
 		for(int j=0; j<100; j++) {
-			float32_t mult_11 = a11*buffer1[j];
-			float32_t mult_12 = a12*buffer2[j];
-			float32_t mult_21 = a21*buffer1[j];
-			float32_t mult_22 = a22*buffer2[j];
-			float32_t X1 = mult_11 + mult_12;
-			float32_t X2 = mult_21 + mult_22;	
-
-			X1 = buffer1[j] - mean1;
-			X2 = buffer2[j] - mean2;
-			sum1 += X1;
-			sum2 += X2;
-			
-			buffer1[j] = X1;
-			buffer2[j] = X2;
+			buffer1[j] = buffer1[j] - mean1;
+			buffer2[j] = buffer2[j] - mean2;
 		}
 		BSP_QSPI_Write((uint8_t *)buffer1, temp3, 400);
 		BSP_QSPI_Write((uint8_t *)buffer2, temp4, 400);
@@ -793,13 +774,13 @@ void eigValues(){
 }
 
 void eigVectors(){
-	simultSolve(var1 - eig[0], cov1, cov2, var2 - eig[0], sols1);
-	simultSolve(var1 - eig[1], cov1, cov2, var2 - eig[1], sols2);
+	simultSolve(var1 - eig[0], cov1, cov2, var2 - eig[0], -0.1681, sols1);
+	simultSolve(var1 - eig[1], cov1, cov2, var2 - eig[1], -0.9858, sols2);
 		
-	eigVecMatrixData[0] = -0.1681;		//x1
-	eigVecMatrixData[1] = -0.9858;		//x2
-	eigVecMatrixData[2] = -0.9858;		//y1
-	eigVecMatrixData[3] = 0.1681;		//y2
+	eigVecMatrixData[0] = sols1[0];		//x1
+	eigVecMatrixData[1] = sols2[0];		//x2
+	eigVecMatrixData[2] = sols1[1];		//y1
+	eigVecMatrixData[3] = sols2[1];		//y2
 }
 
 void whiteEnv(){
@@ -944,16 +925,7 @@ void fpica() {
 				temp7+=400;
 				temp8+=400;
 				
-				for(int j=0; j<100; j++) {
-					float32_t mult_11 = a11*whiteSigBuf1[j];
-					float32_t mult_12 = a12*whiteSigBuf1[j];
-					float32_t mult_21 = a21*whiteSigBuf1[j];
-					float32_t mult_22 = a22*whiteSigBuf1[j];
-					float32_t X1 = mult_11 + mult_12;
-					float32_t X2 = mult_21 + mult_22;
-					float32_t a = whiteningMatrixData[0]*whiteSigBuf1[j];
-					float32_t b = whiteningMatrixData[0]*whiteSigBuf1[j];
-			
+				for(int j=0; j<100; j++) {			
 					whiteSigBuf1[j] = (whiteSigBuf1[j]*wData[0])+(whiteSigBuf2[j]*wData[1]);
 					whiteSigBuf1[j] = whiteSigBuf1[j]*whiteSigBuf1[j]*whiteSigBuf1[j];
 				}
@@ -974,16 +946,7 @@ void fpica() {
 				temp7+=400;
 				temp9+=400;
 				
-				for(int j=0; j<100; j++) {
-					float32_t mult_11 = a11*whiteSigBuf1[j];
-					float32_t mult_12 = a12*whiteSigBuf1[j];
-					float32_t mult_21 = a21*whiteSigBuf1[j];
-					float32_t mult_22 = a22*whiteSigBuf1[j];
-					float32_t X1 = mult_11 + mult_12;
-					float32_t X2 = mult_21 + mult_22;
-					float32_t a = whiteningMatrixData[0]*whiteSigBuf1[j];
-					float32_t b = whiteningMatrixData[0]*whiteSigBuf1[j];	
-					
+				for(int j=0; j<100; j++) {					
 					sums[0] += whiteSigBuf1[j]*whiteSigBuf2[j];
 				}
 			}
@@ -998,16 +961,7 @@ void fpica() {
 				temp8+=400;
 				temp9+=400;
 				
-				for(int j=0; j<100; j++) {
-					float32_t mult_11 = a11*whiteSigBuf1[j];
-					float32_t mult_12 = a12*whiteSigBuf1[j];
-					float32_t mult_21 = a21*whiteSigBuf1[j];
-					float32_t mult_22 = a22*whiteSigBuf1[j];
-					float32_t X1 = mult_11 + mult_12;
-					float32_t X2 = mult_21 + mult_22;
-					float32_t a = whiteningMatrixData[0]*whiteSigBuf1[j];
-					float32_t b = whiteningMatrixData[0]*whiteSigBuf1[j];					
-					
+				for(int j=0; j<100; j++) {					
 					sums[1] += whiteSigBuf1[j]*whiteSigBuf2[j];
 				}
 			}
@@ -1084,38 +1038,22 @@ void configDacOutput(int addr1, int addr2, float32_t maxValue1, float32_t maxVal
 	int temp2 = addr2;	
 	float32_t buff1[100];
 	float32_t buff2[100];
-	
-
 	int k = 0;
 	
 	for(int i = 0; i < 16; i++){
 		BSP_QSPI_Read((uint8_t *) buff1, temp1, 400);
 		BSP_QSPI_Read((uint8_t *) buff2, temp2, 400);
-		
 		temp1 += 400;
 		temp2 += 400;
-		
 		
 		for(int j = 0; j < 100; j++){
 			buff1[j] = buff1[j] + maxValue1;
 			x1[k] = (uint8_t) (((buff1[j])/(2.0*maxValue1)) * 254);
-			
 			buff2[j] = buff2[j] + maxValue2;
-			x2[k] = (uint8_t) (((buff2[j])/(2.0*maxValue2)) * 254);
-			
-			memset(buffer, 0, strlen(buffer));
-			sprintf(buffer, "v1: %d v2: %d\n", x1[k], x2[k]);
-			HAL_UART_Transmit(&huart1, (uint8_t *) buffer, strlen(buffer), 30000);
-			
+			x2[k] = (uint8_t) (((buff2[j])/(2.0*maxValue2)) * 254);			
 			k++;
 		}
-	}
-	
-			memset(buffer, 0, strlen(buffer));
-			sprintf(buffer, "max1: %f max2: %f\n", maxValue1, maxValue2);
-			HAL_UART_Transmit(&huart1, (uint8_t *) buffer, strlen(buffer), 30000);
-		
-	
+	}	
 }
 
 void eraseMemory() {
@@ -1133,13 +1071,13 @@ void eraseMemory() {
 		}
 }
 
-float32_t * simultSolve(float32_t a, float32_t b, float32_t p, float32_t q, float32_t * sols){
+float32_t * simultSolve(float32_t a, float32_t b, float32_t p, float32_t q, float32_t xVal, float32_t * sols){
 
 	float64_t x, y;
 	float64_t c = 0;
 	float64_t r = 0;
 	
-	x = 1;
+	x = xVal;
 	y = (c/b) + ((-1*a/b)*x); 
 
 	sols[0] = x;
