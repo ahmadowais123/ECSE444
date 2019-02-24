@@ -555,23 +555,28 @@ void soundThread(void const * argument) {
 					addr2 = read_address2;
 					unmixedWaves(addr1, addr2);
 					readMixWaves(addr1, addr2);
+					HAL_UART_Transmit(&huart1, (uint8_t *) "Sine Waves Printed\n", 19, 30000);
 					chooseNumSamples = 0;
 				} else if(chooseThread == 2){
 					addr1 = read_address3;
 					addr2 = read_address4;
 					mixWaves(read_address1, read_address2);
 					readMixWaves(addr1, addr2);
+					HAL_UART_Transmit(&huart1, (uint8_t *) "Mixed Waves Printed\n", 20, 30000);
 					chooseNumSamples = 2;
 				} else if(chooseThread == 3) {
 					fastica();
 					addr1 = read_address10;
 					addr2 = read_address11;
 					readMixWaves(addr1, addr2);
+					HAL_UART_Transmit(&huart1, (uint8_t *) "Sine Waves Retrieved\n", 21, 30000);
 					chooseNumSamples = 4;
 				} else if(chooseThread == 4) {
 					osThreadTerminate(blinkThreadTaskHandle);
+					HAL_UART_Transmit(&huart1, (uint8_t *) "Clearing QSPI Memory...\n", 24, 30000);
 					BSP_QSPI_Erase_Chip();
 					eraseMemory();
+					HAL_UART_Transmit(&huart1, (uint8_t *) "Cleared!\n", 9, 30000);
 					osThreadCreate(osThread(blinkTask), NULL);
 					while(1){};
 				}
